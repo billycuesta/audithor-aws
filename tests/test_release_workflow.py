@@ -34,3 +34,18 @@ def test_release_workflow_has_pinned_build_and_publish_contract():
     artifact = next(step for step in build["steps"] if "upload-artifact" in step.get("uses", ""))
     assert "SHA256SUMS" in artifact["with"]["path"]
     assert tomllib.loads((ROOT / "pyproject.toml").read_text())['tool']['hatch']['version']['path'] == "audithor/__init__.py"
+
+
+def test_release_job_uses_step_scoped_repository_context_without_checkout():
+    data = yaml.safe_load(WORKFLOW.read_text())
+    jobs = data["jobs"]
+    release = jobs["release"]
+    release_step = next(step for step in release["steps"] if "gh release create" in step.get("run", ""))
+
+    assert not any("actions/checkout" in step.get("uses", "") for step in release["steps"])
+    assert release_step["env"]["GH_REPO"] == "${{ github.repository }}"
+    assert "GH_TOKEN" in release_step["env"]
+    assert "GH_REPO" not in data.get("env", {})
+    assert "GH_TOKEN" not in data.get("env", {})
+    assert "GH_REPO" not in release.get("env", {})
+    assert "GH_TOKEN" not in release.get("env", {})
