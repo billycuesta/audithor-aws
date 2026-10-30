@@ -2,6 +2,9 @@
 # audithor_app.py - FICHERO PRINCIPAL (REFACTORIZADO)
 # ==============================================================================
 from flask import Flask, render_template, request, jsonify, send_from_directory
+from werkzeug.exceptions import RequestEntityTooLarge
+import os
+import ipaddress
 from flask_cors import CORS
 import threading
 import webbrowser
@@ -62,8 +65,88 @@ def get_boto_session(access_key, secret_key, session_token=None):
 # ==============================================================================
 # CONF. APLICACIÓN FLASK
 # ==============================================================================
+def get_bind_config(env=os.environ):
+    host = env.get("AUDITHOR_HOST", "127.0.0.1")
+    try:
+        port = int(env.get("AUDITHOR_PORT", "5001"))
+        if not 1 <= port <= 65535:
+            raise ValueError
+    except (TypeError, ValueError):
+        collection_logger.warning("Invalid AUDITHOR_PORT; using default port 5001.")
+        port = 5001
+    return host, port
+
+
+def get_allowed_origins(host="127.0.0.1", port=5001):
+    origins = {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
+    try:
+        loopback = ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback = host.lower() == "localhost"
+    if not loopback:
+        origins.add(f"http://{host}:{port}")
+    return origins
+
+
+def build_csp(port):
+    return (
+        "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; "
+        f"connect-src 'self' http://127.0.0.1:{port} http://localhost:{port}; "
+        "object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    )
+
+
 app = Flask(__name__)
-CORS(app)
+app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024  # Full audit exports can be large.
+_bind_host, _bind_port = get_bind_config()
+_allowed_origins = get_allowed_origins(_bind_host, _bind_port)
+CORS(app, resources={r"/*": {"origins": sorted(_allowed_origins), "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type"], "supports_credentials": False}})
+
+
+@app.before_request
+def _request_guard():
+    allowed_hosts = {f"127.0.0.1:{_bind_port}", f"localhost:{_bind_port}", f"{_bind_host}:{_bind_port}"}
+    if request.host.lower() not in {value.lower() for value in allowed_hosts}:
+        return jsonify({"error": "Host is not allowed."}), 403
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        origin = request.headers.get("Origin")
+        if origin and origin not in _allowed_origins:
+            return jsonify({"error": "Origin is not allowed."}), 403
+        if request.method == "POST" and request.path.startswith(("/api/", "/run_")) and request.mimetype != "application/json":
+            return jsonify({"error": "Content-Type must be application/json."}), 415
+
+
+@app.after_request
+def _security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    if response.mimetype == "text/html":
+        response.headers["Content-Security-Policy"] = build_csp(_bind_port)
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    if request.path.startswith(("/api/", "/run_")):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.errorhandler(413)
+def _too_large(_exc):
+    return jsonify({"error": "Request body exceeds the 64 MiB limit."}), 413
+
+
+def _error_response(exc, public_message, status=500):
+    diagnostic = classify_error(exc)
+    fields = {"exceptionType": type(exc).__name__, "category": diagnostic["category"]}
+    if diagnostic.get("awsRequestId"):
+        fields["awsRequestId"] = diagnostic["awsRequestId"]
+    scan_id = getattr(request, "scan_id", None)
+    if scan_id:
+        fields["scanId"] = scan_id
+    collection_logger.warning(json.dumps({"event": "request.error", **fields}))
+    return jsonify({"error": public_message, "category": diagnostic["category"]}), status
 if not collection_logger.handlers:
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(message)s"))
@@ -89,7 +172,7 @@ def run_iam_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": iam_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting IAM data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting IAM data:", 500)
 
 @app.route('/api/run-securityhub-audit', methods=['POST'])
 def run_securityhub_audit():
@@ -103,7 +186,7 @@ def run_securityhub_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": { "accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z") }, "results": { "servicesStatus": enabled_service_status, "findings": findings_data } })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting Security Hub data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting Security Hub data:", 500)
 
 @app.route('/api/run-exposure-audit', methods=['POST'])
 def run_exposure_audit():
@@ -115,7 +198,7 @@ def run_exposure_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": exposure_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting Internet exposure.: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting Internet exposure.:", 500)
 
 @app.route('/api/run-guardduty-audit', methods=['POST'])
 def run_guardduty_audit():
@@ -126,7 +209,7 @@ def run_guardduty_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": guardduty_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting GuardDuty data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting GuardDuty data:", 500)
 
 @app.route('/api/run-waf-audit', methods=['POST'])
 def run_waf_audit():
@@ -137,7 +220,7 @@ def run_waf_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": waf_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting WAF data {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting WAF data", 500)
 
 @app.route('/api/run-cloudtrail-lookup', methods=['POST'])
 def run_cloudtrail_lookup():
@@ -163,7 +246,7 @@ def run_cloudtrail_lookup():
         lookup_results = cloudtrail.lookup_cloudtrail_events(session, region, event_name, start_time, end_time)
         return jsonify({"results": lookup_results})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _error_response(e, "An unexpected error occurred.", 500)
 
 @app.route('/api/run-cloudwatch-audit', methods=['POST'])
 def run_cloudwatch_audit():
@@ -174,7 +257,7 @@ def run_cloudwatch_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": cloudwatch_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting CloudWatch/SNS data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting CloudWatch/SNS data:", 500)
 
 def collection_response(collector):
     scan_id = str(uuid.uuid4())
@@ -232,7 +315,7 @@ def run_compute_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": { "accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": compute_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting Compute data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting Compute data:", 500)
 
 @app.route('/api/run-databases-audit', methods=['POST'])
 def run_databases_audit():
@@ -248,7 +331,7 @@ def run_network_policies_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": { "accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": network_policies_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting Network Policies data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting Network Policies data:", 500)
         
 @app.route('/api/run-config-sh-audit', methods=['POST'])
 def run_config_sh_audit():
@@ -259,7 +342,7 @@ def run_config_sh_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": { "accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting Config & Security Hub data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting Config & Security Hub data:", 500)
 
 @app.route('/api/run-config-sh-status-audit', methods=['POST'])
 def run_config_sh_status_audit():
@@ -270,7 +353,7 @@ def run_config_sh_status_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": { "accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting Config & SH status: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting Config & SH status:", 500)
 
 
 @app.route('/api/run-network-detail-audit', methods=['POST'])
@@ -314,7 +397,7 @@ def handle_network_detail_audit():
     except Exception as e:
         # Capturamos cualquier otro error inesperado y lo devolvemos de forma clara
         print(f"[ERROR] en handle_network_detail_audit: {e}") # Log para tu consola
-        return jsonify({"error": f"An unexpected server error occurred: {str(e)}"}), 500
+        return _error_response(e, "An unexpected server error occurred:", 500)
 
 @app.route('/api/run-connectivity-audit', methods=['POST'])
 def run_connectivity_audit():
@@ -325,7 +408,7 @@ def run_connectivity_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": { "accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": connectivity_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting connectivity data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting connectivity data:", 500)
 
 @app.route('/api/run-playground-audit', methods=['POST'])
 def run_playground_audit():
@@ -343,9 +426,9 @@ def run_playground_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": { "accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": path_results })
     except ValueError as e: 
-        return jsonify({"error": str(e)}), 400
+        return _error_response(e, "The request could not be processed.", 400)
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while analyzing the network route: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while analyzing the network route:", 500)
 
 @app.route('/api/run-kms-audit', methods=['POST'])
 def run_kms_audit():
@@ -356,16 +439,18 @@ def run_kms_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": kms_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting KMS data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting KMS data:", 500)
 
 @app.route('/api/run-sslscan', methods=['POST'])
 def run_sslscan():
     data = request.get_json()
-    targets_str = data.get('target')
+    targets_str = data.get('target') if isinstance(data, dict) else None
     if not targets_str:
         return jsonify({"error": "No target has been provided."}), 400
-    
-    results = playground.run_sslscan_on_targets(targets_str)
+    try:
+        results = playground.run_sslscan_on_targets(targets_str)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify({"results": results})
 
 @app.route('/run_executive_summary', methods=['POST'])
@@ -421,7 +506,7 @@ def run_federation_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": { "accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": federation_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting federation data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting federation data:", 500)
 
 @app.route('/api/run-access-analyzer-audit', methods=['POST'])
 def run_access_analyzer_audit():
@@ -432,7 +517,7 @@ def run_access_analyzer_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": { "accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": analyzer_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting Access Analyzer data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting Access Analyzer data:", 500)
 
 @app.route('/api/run-inspector-findings-audit', methods=['POST'])
 def run_inspector_findings_audit():
@@ -453,7 +538,7 @@ def get_sso_group_members_endpoint():
         members = iam.get_sso_group_members(session, group_id)
         return jsonify({"members": members})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _error_response(e, "An unexpected error occurred.", 500)
 
 @app.route('/api/run-cloudtrail-audit', methods=['POST'])
 def run_cloudtrail_audit():
@@ -465,7 +550,7 @@ def run_cloudtrail_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": cloudtrail_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting CloudTrail data.: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting CloudTrail data.:", 500)
 
 @app.route('/api/run-ecr-audit', methods=['POST'])
 def run_ecr_audit():
@@ -476,7 +561,7 @@ def run_ecr_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": ecr_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting ECR data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting ECR data:", 500)
 
 @app.route('/api/run-simulate-policy', methods=['POST'])
 def run_simulate_policy():
@@ -511,9 +596,9 @@ def run_simulate_policy():
         return jsonify({"results": simulation_results})
         
     except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+        return _error_response(e, "The request could not be processed.", 400)
     except Exception as e:
-        return jsonify({"error": f"Simulation error: {str(e)}"}), 500
+        return _error_response(e, "Simulation error:", 500)
 
 @app.route('/api/run-simulate-lambda-policy', methods=['POST'])
 def run_simulate_lambda_policy():
@@ -538,9 +623,9 @@ def run_simulate_lambda_policy():
         return jsonify({"results": simulation_results})
         
     except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+        return _error_response(e, "The request could not be processed.", 400)
     except Exception as e:
-        return jsonify({"error": f"Simulation error: {str(e)}"}), 500
+        return _error_response(e, "Simulation error:", 500)
 
 
 @app.route('/api/run-codepipeline-audit', methods=['POST'])
@@ -552,7 +637,7 @@ def run_codepipeline_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": codepipeline_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting CodePipeline data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting CodePipeline data:", 500)
 
 
 @app.route('/api/run-inventory-audit', methods=['POST'])
@@ -564,7 +649,7 @@ def run_inventory_audit():
         sts = session.client("sts")
         return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": inventory_results })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting inventory data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting inventory data:", 500)
 
 
 @app.route('/api/get-user-assumable-roles', methods=['POST'])
@@ -586,12 +671,7 @@ def get_user_assumable_roles_endpoint():
         return jsonify(result)
         
     except Exception as e:
-        return jsonify({
-            "status": "error",
-            "username": username,
-            "error": f"Unexpected error: {str(e)}",
-            "assumable_roles": []
-        }), 500
+        return _error_response(e, "Unexpected error:", 500)
 
 @app.route('/api/analyze-custom-policy', methods=['POST'])
 def analyze_custom_policy_endpoint():
@@ -612,10 +692,7 @@ def analyze_custom_policy_endpoint():
         return jsonify(result)
         
     except Exception as e:
-        return jsonify({
-            "status": "error",
-            "error": f"Unexpected error analyzing custom policy: {str(e)}"
-        }), 500
+        return _error_response(e, "Unexpected error analyzing custom policy:", 500)
 
 @app.route('/api/run-s3-security-check', methods=['POST'])
 def run_s3_security_check():
@@ -810,9 +887,7 @@ def run_s3_security_check():
             "error": f"AWS error: {e.response['Error']['Code']} - {e.response['Error']['Message']}"
         }), 400
     except Exception as e:
-        return jsonify({
-            "error": f"Unexpected error during security analysis: {str(e)}"
-        }), 500
+        return _error_response(e, "Unexpected error during security analysis:", 500)
     
 @app.route('/api/run-secrets-manager-audit', methods=['POST'])
 def run_secrets_manager_audit():
@@ -829,16 +904,22 @@ def run_secrets_manager_audit():
             "results": secrets_results 
         })
     except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting Secrets Manager data: {str(e)}"}), 500
+        return _error_response(e, "Unexpected error while collecting Secrets Manager data:", 500)
 
 
 # ==============================================================================
 # EJECUCIÓN SERVIDOR
 # ==============================================================================
 if __name__ == '__main__':
-    port = 5001
-    url = f"http://127.0.0.1:{port}/"
+    host, port = get_bind_config()
+    try:
+        loopback = ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback = host.lower() == "localhost"
+    if not loopback:
+        collection_logger.warning("The API has no authentication and is bound to a non-loopback host.")
+    url = f"http://{host}:{port}/"
     def open_browser():
         webbrowser.open_new(url)
     threading.Timer(1, open_browser).start()
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host=host, port=port, debug=False)

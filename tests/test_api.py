@@ -2,13 +2,14 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 import pytest
 import audithor_app
+from conftest import make_client
 
 
 @pytest.fixture
 def client(monkeypatch):
     session = SimpleNamespace(_audithor_account_id="123456789012")
     monkeypatch.setattr(audithor_app.utils, "get_session", lambda data, **kwargs: (session, None))
-    return audithor_app.app.test_client()
+    return make_client(audithor_app.app)
 
 
 def test_api_preserves_partial_and_scan_id(client, monkeypatch):
@@ -86,6 +87,6 @@ def test_executive_summary_legacy_acm_data_is_unchanged(client, monkeypatch):
 def test_session_connectivity_error_is_not_unauthorized(monkeypatch):
     from botocore.exceptions import EndpointConnectionError
     monkeypatch.setattr(audithor_app.utils, "get_session", Mock(side_effect=EndpointConnectionError(endpoint_url="https://example.invalid")))
-    response = audithor_app.app.test_client().post('/api/run-acm-audit', json={})
+    response = make_client(audithor_app.app).post('/api/run-acm-audit', json={})
     assert response.status_code == 503
     assert response.json["category"] == "connectivity_error"

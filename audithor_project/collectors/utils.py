@@ -1,7 +1,7 @@
 # collectors/utils.py
 import boto3
 from botocore.exceptions import ClientError
-from .diagnostics import AWS_CONFIG
+from .diagnostics import AWS_CONFIG, classify_error
 
 def get_session(data, raise_errors=False):
     try:
@@ -21,7 +21,8 @@ def get_session(data, raise_errors=False):
     except Exception as e:
         if raise_errors:
             raise
-        return None, f"Error validating AWS credentials: {str(e)}"
+        category = classify_error(e)["category"]
+        return None, f"AWS credentials could not be validated ({category})"
     
 def get_all_aws_regions(session):
     ec2 = session.client("ec2", region_name="us-east-1")
