@@ -11,9 +11,13 @@ import json
 import subprocess
 import shutil
 import boto3
+import uuid
+import logging
+import traceback
 
 # Importa el motor de reglas (sin cambios)
 from rules import RULES_TO_CHECK, coverage_gaps
+from collectors.diagnostics import logger as collection_logger, AWS_ERRORS, classify_error
 from collectors.network_policies import get_network_details_table
 from collectors import secrets_manager
 from botocore.exceptions import BotoCoreError, ClientError
@@ -60,6 +64,12 @@ def get_boto_session(access_key, secret_key, session_token=None):
 # ==============================================================================
 app = Flask(__name__)
 CORS(app)
+if not collection_logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    collection_logger.addHandler(handler)
+collection_logger.setLevel(logging.INFO)
+collection_logger.propagate = False
 
 # ==============================================================================
 # ENDPOINTS API (ADAPTADOS)
@@ -166,28 +176,52 @@ def run_cloudwatch_audit():
     except Exception as e:
         return jsonify({"error": f"Unexpected error while collecting CloudWatch/SNS data: {str(e)}"}), 500
 
+def collection_response(collector):
+    scan_id = str(uuid.uuid4())
+    supplied_scan_id = request.headers.get("X-Scan-Id", "")
+    try:
+        if supplied_scan_id:
+            scan_id = str(uuid.UUID(supplied_scan_id))
+    except ValueError:
+        pass
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Request body must be a JSON object", "scanId": scan_id}), 400
+    try:
+        session, error = utils.get_session(data, raise_errors=True)
+    except AWS_ERRORS as exc:
+        diagnostic = classify_error(exc)
+        collection_logger.warning(json.dumps({"event": "collection.session_failed", "scanId": scan_id, **diagnostic}))
+        code = 401 if diagnostic["category"] == "authentication_error" else 403 if diagnostic["category"] == "permission_denied" else 503
+        return jsonify({"error": "AWS session validation failed", "scanId": scan_id,
+                        "category": diagnostic["category"]}), code
+    session._audithor_scan_id = scan_id
+    session._audithor_request_id = str(uuid.uuid4())
+    try:
+        results = collector(session)
+        return jsonify({"metadata": {"schemaVersion": 2, "scanId": scan_id, "requestId": session._audithor_request_id,
+                        "accountId": session._audithor_account_id,
+                        "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).isoformat()},
+                        "results": results})
+    except Exception as exc:
+        # Stack frames identify the defect without logging exception payloads/credentials.
+        collection_logger.error(json.dumps({"event": "collection.unexpected_error",
+            "scanId": scan_id, "collector": getattr(collector, "__name__", type(collector).__name__),
+            "exceptionType": type(exc).__name__,
+            "frames": [{"file": f.filename, "line": f.lineno, "function": f.name}
+                       for f in traceback.extract_tb(exc.__traceback__)]}))
+        return jsonify({"error": "Unexpected collection error", "scanId": scan_id}), 500
+
+
 @app.route('/api/run-inspector-audit', methods=['POST'])
 def run_inspector_audit():
-    session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
-    try:
-        inspector_status = inspector.collect_inspector_status(session)
-        inspector_status["findings"] = [] # Default empty findings for fast scan
-        sts = session.client("sts")
-        return jsonify({ "metadata": { "accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": inspector_status })
-    except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting Inspector status: {str(e)}"}), 500
+    return collection_response(inspector.collect_inspector_status)
+
 
 @app.route('/api/run-acm-audit', methods=['POST'])
 def run_acm_audit():
-    session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
-    try:
-        acm_results = acm.collect_acm_data_web(session)
-        sts = session.client("sts")
-        return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": acm_results })
-    except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting ACM data: {str(e)}"}), 500
+    return collection_response(acm.collect_acm_data_web)
+
 
 @app.route('/api/run-compute-audit', methods=['POST'])
 def run_compute_audit():
@@ -202,14 +236,8 @@ def run_compute_audit():
 
 @app.route('/api/run-databases-audit', methods=['POST'])
 def run_databases_audit():
-    session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
-    try:
-        database_results = databases.collect_database_data(session)
-        sts = session.client("sts")
-        return jsonify({ "metadata": { "accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": database_results })
-    except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting Databases data: {str(e)}"}), 500
+    return collection_response(databases.collect_database_data)
+
 
 @app.route('/api/run-network-policies-audit', methods=['POST'])
 def run_network_policies_audit():
@@ -408,14 +436,8 @@ def run_access_analyzer_audit():
 
 @app.route('/api/run-inspector-findings-audit', methods=['POST'])
 def run_inspector_findings_audit():
-    session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
-    try:
-        inspector_findings = inspector.collect_inspector_findings(session)
-        sts = session.client("sts")
-        return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": inspector_findings })
-    except Exception as e:
-        return jsonify({"error": f"Unexpected error while collecting Inspector findings: {str(e)}"}), 500
+    return collection_response(inspector.collect_inspector_findings)
+
 
 @app.route('/api/get-sso-group-members', methods=['POST'])
 def get_sso_group_members_endpoint():

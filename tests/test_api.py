@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from unittest.mock import Mock
 import pytest
 import audithor_app
 
@@ -8,6 +9,35 @@ def client(monkeypatch):
     session = SimpleNamespace(_audithor_account_id="123456789012")
     monkeypatch.setattr(audithor_app.utils, "get_session", lambda data, **kwargs: (session, None))
     return audithor_app.app.test_client()
+
+
+def test_api_preserves_partial_and_scan_id(client, monkeypatch):
+    def collect(session):
+        return {"certificates": [], "_collection": {"status": "partial", "scanId": session._audithor_scan_id}}
+    monkeypatch.setattr(audithor_app.acm, "collect_acm_data_web", collect)
+    scan_id = "af5516eb-9b24-47e2-9cf0-bd76c297845c"
+    response = client.post('/api/run-acm-audit', json={}, headers={"X-Scan-Id": scan_id})
+    assert response.status_code == 200
+    assert response.json["metadata"]["scanId"] == scan_id
+    assert response.json["results"]["_collection"]["status"] == "partial"
+
+
+def test_unexpected_error_is_sanitized(client, monkeypatch):
+    monkeypatch.setattr(audithor_app.acm, "collect_acm_data_web", Mock(side_effect=RuntimeError("SECRET")))
+    response = client.post('/api/run-acm-audit', json={})
+    assert response.status_code == 500
+    assert "SECRET" not in response.get_data(as_text=True)
+    assert response.json["scanId"]
+
+
+def test_collection_rejects_non_object_json_body(client, monkeypatch):
+    get_session = Mock()
+    monkeypatch.setattr(audithor_app.utils, "get_session", get_session)
+    response = client.post('/api/run-acm-audit', json=["x"])
+    assert response.status_code == 400
+    assert response.is_json
+    assert response.json == {"error": "Request body must be a JSON object", "scanId": response.json["scanId"]}
+    get_session.assert_not_called()
 
 
 def test_executive_summary_marks_incomplete_acm_not_assessed(client, monkeypatch):
@@ -51,3 +81,11 @@ def test_executive_summary_legacy_acm_data_is_unchanged(client, monkeypatch):
     response = client.post('/run_executive_summary', json={"acm": {"certificates": []}})
     assert response.status_code == 200
     assert response.json == []
+
+
+def test_session_connectivity_error_is_not_unauthorized(monkeypatch):
+    from botocore.exceptions import EndpointConnectionError
+    monkeypatch.setattr(audithor_app.utils, "get_session", Mock(side_effect=EndpointConnectionError(endpoint_url="https://example.invalid")))
+    response = audithor_app.app.test_client().post('/api/run-acm-audit', json={})
+    assert response.status_code == 503
+    assert response.json["category"] == "connectivity_error"

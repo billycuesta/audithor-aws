@@ -1,8 +1,9 @@
 # collectors/utils.py
 import boto3
 from botocore.exceptions import ClientError
+from .diagnostics import AWS_CONFIG
 
-def get_session(data):
+def get_session(data, raise_errors=False):
     try:
         access_key = data.get('access_key')
         secret_key = data.get('secret_key')
@@ -14,10 +15,12 @@ def get_session(data):
             aws_secret_access_key=secret_key,
             aws_session_token=session_token
         )
-        sts = session.client("sts")
-        sts.get_caller_identity()
+        sts = session.client("sts", config=AWS_CONFIG)
+        session._audithor_account_id = sts.get_caller_identity()["Account"]
         return session, None
     except Exception as e:
+        if raise_errors:
+            raise
         return None, f"Error validating AWS credentials: {str(e)}"
     
 def get_all_aws_regions(session):
