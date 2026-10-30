@@ -896,19 +896,22 @@ def run_secrets_manager_audit():
 # ==============================================================================
 # EJECUCIÓN SERVIDOR
 # ==============================================================================
-def main():
-    host, port = get_bind_config()
+def run(host, port, open_browser=True):
     try:
         loopback = ipaddress.ip_address(host).is_loopback
     except ValueError:
         loopback = host.lower() == "localhost"
     if not loopback:
         collection_logger.warning("The API has no authentication and is bound to a non-loopback host.")
-    url = f"http://{host}:{port}/"
-    def open_browser():
-        webbrowser.open_new(url)
-    threading.Timer(1, open_browser).start()
+    if open_browser:
+        url = f"http://{host}:{port}/"
+        threading.Timer(1, lambda: webbrowser.open_new(url)).start()
     app.run(host=host, port=port, debug=False)
+
+
+def main():
+    host, port = get_bind_config()
+    run(host, port)
 
 
 if __name__ == '__main__':
