@@ -82,12 +82,37 @@ After scan/import, review modules and use **Auditor Notes** to track scoped asse
 
 ## Credential handling
 
-AudiThor runs locally. Credentials are sent only to your local Flask server.
+The browser sends AWS credentials in JSON request bodies to the local Flask process over plain HTTP; the app binds to 127.0.0.1 by default. Credentials are used to create a Boto3 session and are not intentionally persisted or included in structured collection logs or ordinary API responses. Use a trusted workstation; plain HTTP does not protect traffic from other local processes.
 
 Best practices:
 - Prefer temporary credentials.
 - Use least-privilege read-only policies (`SecurityAudit` + `ViewOnlyAccess` baseline).
 - Run in a trusted workstation environment.
+
+## Security
+
+### Network exposure
+- The default bind address is `127.0.0.1` and the default port is `5001`. Override them with `AUDITHOR_HOST` and `AUDITHOR_PORT`.
+- The API has no authentication. Do not expose it beyond loopback. Other processes on the same machine can reach it; there is no per-launch API token.
+- Host and Origin allowlists are checked to mitigate DNS rebinding and cross-site requests. CORS permits loopback origins on the configured port.
+- If `AUDITHOR_HOST` is non-loopback, the Host check accepts that exact host and port (along with the two loopback hostnames). Use the exact address clients will enter; never use `0.0.0.0`.
+- API and `/run_` POST requests require `application/json`. Request bodies are limited to 64 MiB.
+
+### SSL scanner
+`POST /api/run-sslscan` accepts at most 10 targets and 2048 characters. Targets must be hostnames, IPv4 or IPv6 addresses, with an optional port. The scanner uses up to four parallel workers with a 130-second overall deadline and requires the `sslscan` binary on the operator's machine. It scans the targets entered by the operator; use it only on systems you are authorized to test.
+
+### Errors, logs, and browser protections
+- API error responses use generic messages and a category. Structured server logs record diagnostic categories and exception types (and selected request identifiers), not exception text.
+- `build_csp` in `audithor_project/audithor_app.py` sets the dashboard Content-Security-Policy: `default-src 'self'`; scripts may load from self and jsDelivr; styles from self, inline styles and Google Fonts; fonts from self, Google Fonts and data URLs; images from self and data URLs; connections to self and the loopback hosts on the configured port. Objects, base URLs, form submissions and framing are denied.
+- Responses set `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`; API responses also set `Cache-Control: no-store`. HTML responses also set Permissions-Policy and same-origin Cross-Origin-Opener-Policy.
+- Chart.js and the stacked100 plugin CDN scripts use Subresource Integrity. Tailwind is vendored under `audithor_project/static/vendor` because `cdn.tailwindcss.com` sends no CORS headers, preventing integrity checks. Google Fonts is loaded without integrity because its CSS varies by browser.
+
+### Rendering safety for contributors
+Treat AWS data and imported JSON as untrusted. Build markup with the `html` tagged template and `setHtml` from `audithor_project/static/js/safe_html.js`; use `act()` rather than inline event handlers. Never assign `innerHTML` directly in application code or pass data to `raw()`. The repository currently has no `tests/no_raw_innerhtml.test.mjs` guard test; `setHtml` is the controlled sink and requires a `SafeHtml` value.
+
+### Known limits
+- There is no per-launch API token, and the local API uses plain HTTP.
+- CI tests with Python 3.12; automated tests do not exercise live AWS integration.
 
 ## License
 
