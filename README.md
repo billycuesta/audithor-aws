@@ -5,8 +5,8 @@
  ██╔══██╗██║   ██║██╔══██╗██║╚══██╔══╝██║  ██║██╔═══██╗██╔══██╗
  ███████║██║   ██║██║  ██║██║   ██║   ███████║██║   ██║██████╔╝
  ██╔══██║██║   ██║██║  ██║██║   ██║   ██╔══██║██║   ██║██╔══██╗
- ██║  ██║╚██████╔╝██████╔╝██║   ██║   ██║  ██║╚██████╔╝██║  ██║
- ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝
+ ██║  ██║╚██████╔╝██████╔╝╚██████╔╝██║  ██║╚██████╔╝██║  ██║
+ ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 ```
 
 AWS Security Audit powered by automation to detect risk faster and prioritize remediation.
@@ -49,36 +49,140 @@ The Playground offers path analysis and permission simulation.
 - Backend: Python 3, Flask, Boto3 (`audithor/audithor_app.py`)
 - Frontend: HTML, Tailwind CSS, Chart.js, vanilla JS modules
 
-## Prerequisites
-
-1. Python 3.8+ and `pip`.
-
 ## Installation
 
-```bash
-git clone https://github.com/billycuesta/AudiThor-AWS.git
-cd AudiThor-AWS/AudiThor-local
+Install **uv** first. uv manages a compatible Python runtime automatically, so customers do not need to install Python separately or create a virtual environment.
 
-python -m venv venv
-source venv/bin/activate
+macOS and Linux:
 
-pip install -r requirements.txt
+```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-## Usage
+Windows PowerShell:
 
-Run the app:
-
-```bash
-python -m audithor
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-Then in the browser:
+If running a downloaded installer script is not allowed on your machine, use one of these package-manager alternatives:
 
-1. Use **Scan Account** with AWS credentials, or
-2. Use **Import JSON** from the landing page.
+```sh
+brew install uv
+```
 
-After scan/import, review modules and use **Auditor Notes** to track scoped assets and notes.
+```powershell
+winget install --id=astral-sh.uv -e
+```
+
+```sh
+pipx install uv
+```
+
+Install AudiThor from the public Git repository:
+
+```sh
+uv tool install git+https://github.com/billycuesta/audithor-aws
+```
+
+Once releases exist, pin a specific release tag:
+
+```sh
+uv tool install git+https://github.com/billycuesta/audithor-aws@vX.Y.Z
+```
+
+To run it once without installing the tool:
+
+```sh
+uvx --from git+https://github.com/billycuesta/audithor-aws audithor
+```
+
+## Run
+
+Start AudiThor:
+
+```sh
+audithor
+```
+
+The app binds to `127.0.0.1:5001` by default and opens its local web interface in your default browser. Keep the terminal open while using it; stop the server with **Ctrl+C**.
+
+| Option | Description |
+| --- | --- |
+| `--host HOST` | Interface to bind (default: `AUDITHOR_HOST` or `127.0.0.1`). |
+| `--port PORT` | Port to bind (default: `AUDITHOR_PORT` or `5001`). |
+| `--no-browser` | Do not open a browser at startup. |
+| `--version` | show program's version number and exit |
+
+`AUDITHOR_HOST` and `AUDITHOR_PORT` provide the corresponding defaults when options are omitted.
+
+### Update
+
+```sh
+uv tool upgrade audithor
+```
+
+For an unpinned Git URL install, `uv tool upgrade audithor` picks up the newest commit of the default branch.
+
+For an install pinned to a release tag, upgrading keeps the tool on that tag. To move to a newer release, reinstall with its tag:
+
+```sh
+uv tool install --reinstall git+https://github.com/billycuesta/audithor-aws@vX.Y.Z
+```
+
+### Uninstall
+
+```sh
+uv tool uninstall audithor
+```
+
+### If the command is not found
+
+Add uv's tool executable directory to your shell PATH:
+
+```sh
+uv tool update-shell
+```
+
+Then open a new terminal.
+
+### Offline or restricted machines
+
+Download the wheel and `SHA256SUMS` file from the AudiThor GitHub Release assets. Verify the wheel checksum before installing.
+
+macOS/Linux:
+
+```sh
+shasum -a 256 -c SHA256SUMS
+```
+
+Windows PowerShell:
+
+```powershell
+Get-FileHash .\audithor-X.Y.Z-py3-none-any.whl -Algorithm SHA256
+```
+
+Compare the reported hash with the wheel's entry in `SHA256SUMS`, then install:
+
+```sh
+uv tool install ./audithor-X.Y.Z-py3-none-any.whl
+```
+
+Alternatively, `pipx install <wheel>` works when Python 3.10 or newer is present.
+
+### Development
+
+```sh
+git clone https://github.com/billycuesta/audithor-aws.git
+cd audithor-aws
+uv venv
+uv pip install -e ".[dev]"
+python -m pytest -q
+npm ci --ignore-scripts
+npm test
+```
+
+`requirements.txt` is the pinned dependency set used by CI and reproducible builds; the customer installation path above uses the package metadata instead.
 
 ## Credential handling
 
@@ -163,17 +267,3 @@ with `service`, `status`, `coverageKnown` and `failedUnits` (at most 10). Older 
 `_collection` behave as before. The response remains a JSON list; consumers counting findings should
 filter on `status`. The affected rule IDs are `INSPECTOR_001`–`INSPECTOR_005`, `DB_001`–`DB_005`,
 `ACM_001`, `ECR_004`, `ECR_005`, `CODEPIPELINE_003` and `CODEPIPELINE_004`.
-
-Run regression checks without AWS credentials:
-
-```bash
-pip install -r requirements-dev.txt
-python -m pytest -q
-npm ci --ignore-scripts
-npm test
-```
-
-The tests include a real botocore Stubber, simulated transport failures, partial
-pagination, opt-in filtering, HTTP-200 Inspector account errors, cross-service
-isolation, safe diagnostic rendering, complete-view DOM smoke checks and Flask API responses. Live AWS integration
-is intentionally separate and has not been run by these tests.
