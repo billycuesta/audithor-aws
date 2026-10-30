@@ -5,6 +5,7 @@
 
 // --- IMPORTS ---
 import { handleTabClick, createStatusBadge } from '../utils.js';
+import { act, escapeHtml, html, join, setHtml } from '../safe_html.js';
 
 // --- SERVICE DESCRIPTIONS ---
 const serviceDescriptions = {
@@ -45,51 +46,48 @@ export const buildKmsSecretsView = () => {
   const container = document.getElementById('kms-secrets-view');
   if (!container) return;
 
-  // ensure globals exist
   window.scopedResources = window.scopedResources || {};
-
   const activeTabEl = container.querySelector('#kms-secrets-tabs .border-\\[\\#eb3496\\]');
   const activeTabData = activeTabEl ? activeTabEl.dataset.tab : 'kms-secrets-summary-content';
   const hasKmsData = window.kmsApiData && window.kmsApiData.results;
   const hasSecretsData = window.secretsManagerApiData && window.secretsManagerApiData.results;
-
   if (!hasKmsData && !hasSecretsData) {
-    container.innerHTML = createEmptyState();
+    setHtml(container, createEmptyState());
     return;
   }
 
   const kmsKeys = hasKmsData ? window.kmsApiData.results.keys || [] : [];
   const secrets = hasSecretsData ? window.secretsManagerApiData.results.secrets || [] : [];
-  const executionDate = hasKmsData
-    ? window.kmsApiData.metadata.executionDate
-    : hasSecretsData
-    ? window.secretsManagerApiData.metadata.executionDate
-    : 'N/A';
+  const executionDate = hasKmsData ? window.kmsApiData.metadata.executionDate : hasSecretsData ? window.secretsManagerApiData.metadata.executionDate : 'N/A';
+  const customerManagedKeys = kmsKeys.filter(key => key.KeyManager === 'CUSTOMER');
+  const awsManagedKeys = kmsKeys.filter(key => key.KeyManager === 'AWS');
+  const optionalTabs = [
+    ...(hasSecretsData ? [html`<a href="#" data-tab="secrets-manager-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Secrets Manager (${secrets.length})</a>`] : []),
+    ...(hasKmsData ? [html`<a href="#" data-tab="kms-customer-keys-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Customer Keys (${customerManagedKeys.length})</a>`, html`<a href="#" data-tab="kms-aws-keys-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">AWS Keys (${awsManagedKeys.length})</a>`] : [])
+  ];
+  const optionalSections = [
+    ...(hasSecretsData ? [html`<div id="secrets-manager-content" class="kms-secrets-tab-content hidden">${renderServiceDescription(serviceDescriptions.secretsOverview)}${renderSecretsManagerTable(secrets)}</div>`] : []),
+    ...(hasKmsData ? [html`<div id="kms-customer-keys-content" class="kms-secrets-tab-content hidden">${renderServiceDescription(serviceDescriptions.customerManagedKeys)}${renderCustomerManagedKeysTable(customerManagedKeys)}</div>`, html`<div id="kms-aws-keys-content" class="kms-secrets-tab-content hidden">${renderAwsManagedKeysTable(awsManagedKeys)}</div>`] : [])
+  ];
 
-  // Separate keys by type for tab counts
-  const customerManagedKeys = kmsKeys.filter(k => k.KeyManager === 'CUSTOMER');
-  const awsManagedKeys = kmsKeys.filter(k => k.KeyManager === 'AWS');
-
-  container.innerHTML = `
+  setHtml(container, html`
     <header class="flex justify-between items-center mb-6">
       <div>
         <h2 class="text-2xl font-bold text-[#204071]">KMS & Secrets Manager</h2>
         <p class="text-sm text-gray-500">${executionDate}</p>
       </div>
     </header>
-    
+
     <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
       <h3 class="text-sm font-semibold text-blue-800 mb-2">Audit Guidance</h3>
       <p class="text-sm text-blue-700">Review KMS key management and Secrets Manager configuration to ensure proper encryption controls, secret rotation policies, and access management. Focus on customer-managed keys and automatic secret rotation for sensitive workloads.</p>
     </div>
-    
+
     <div class="border-b border-gray-200 mb-6">
       <nav class="-mb-px flex flex-wrap space-x-6" id="kms-secrets-tabs">
         <a href="#" data-tab="kms-secrets-summary-content" class="tab-link py-3 px-1 border-b-2 border-[#eb3496] text-[#eb3496] font-semibold text-sm">Summary</a>
         <a href="#" data-tab="kms-secrets-overview-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Overview</a>
-        ${hasSecretsData ? '<a href="#" data-tab="secrets-manager-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Secrets Manager (' + secrets.length + ')</a>' : ''}
-        ${hasKmsData ? '<a href="#" data-tab="kms-customer-keys-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Customer Keys (' + customerManagedKeys.length + ')</a>' : ''}
-        ${hasKmsData ? '<a href="#" data-tab="kms-aws-keys-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">AWS Keys (' + awsManagedKeys.length + ')</a>' : ''}
+        ${join(optionalTabs, ' ')}
         <a href="#" data-tab="rotation-analysis-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Rotation Analysis</a>
       </nav>
     </div>
@@ -99,35 +97,22 @@ export const buildKmsSecretsView = () => {
         ${renderServiceDescription(serviceDescriptions.overview)}
         ${renderCombinedOverviewTable(kmsKeys, secrets)}
       </div>
-      ${hasSecretsData ? `<div id="secrets-manager-content" class="kms-secrets-tab-content hidden">
-        ${renderServiceDescription(serviceDescriptions.secretsOverview)}
-        ${renderSecretsManagerTable(secrets)}
-      </div>` : ''}
-      ${hasKmsData ? `<div id="kms-customer-keys-content" class="kms-secrets-tab-content hidden">
-        ${renderServiceDescription(serviceDescriptions.customerManagedKeys)}
-        ${renderCustomerManagedKeysTable(customerManagedKeys)}
-      </div>` : ''}
-      ${hasKmsData ? `<div id="kms-aws-keys-content" class="kms-secrets-tab-content hidden">
-        ${renderAwsManagedKeysTable(awsManagedKeys)}
-      </div>` : ''}
+      ${join(optionalSections)}
       <div id="rotation-analysis-content" class="kms-secrets-tab-content hidden">
         ${renderServiceDescription(serviceDescriptions.keyRotation)}
         ${renderRotationAnalysisTable(customerManagedKeys, secrets)}
       </div>
     </div>
-  `;
+  `);
 
-  // RESTORE ACTIVE TAB STATE
   const tabsNav = container.querySelector('#kms-secrets-tabs');
-
   if (activeTabData !== 'kms-secrets-summary-content') {
     const defaultActiveLink = tabsNav.querySelector('a[data-tab="kms-secrets-summary-content"]');
     const defaultActiveContent = document.getElementById('kms-secrets-summary-content');
     defaultActiveLink.classList.remove('border-[#eb3496]', 'text-[#eb3496]');
     defaultActiveLink.classList.add('border-transparent', 'text-gray-500');
     defaultActiveContent.classList.add('hidden');
-
-    const newActiveLink = tabsNav.querySelector(`a[data-tab="${activeTabData}"]`);
+    const newActiveLink = [...tabsNav.querySelectorAll('a[data-tab]')].find(link => link.dataset.tab === activeTabData);
     const newActiveContent = document.getElementById(activeTabData);
     if (newActiveLink && newActiveContent) {
       newActiveLink.classList.add('border-[#eb3496]', 'text-[#eb3496]');
@@ -135,13 +120,12 @@ export const buildKmsSecretsView = () => {
       newActiveContent.classList.remove('hidden');
     }
   }
-
   if (tabsNav) tabsNav.addEventListener('click', handleTabClick(tabsNav, '.kms-secrets-tab-content'));
 };
 
 // --- SERVICE DESCRIPTION RENDERER ---
 const renderServiceDescription = (serviceInfo) => {
-  return `
+  return html`
     <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
       <h3 class="text-lg font-semibold text-gray-800 mb-3">${serviceInfo.title}</h3>
       <div class="space-y-3">
@@ -167,7 +151,7 @@ const createKmsSecretsSummaryHtml = (kmsKeys, secrets) => {
   const rotationDisabledSecrets = secrets.filter(s => !s.RotationEnabled && !s.Error).length;
   const highRiskSecrets = secrets.filter(s => s.RiskScore && s.RiskScore >= 60).length;
   
-  return `
+  return html`
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
       <div class="bg-white border border-gray-100 p-5 rounded-xl shadow-sm">
         <div><p class="text-sm text-gray-500">Total KMS Keys</p></div>
@@ -222,7 +206,7 @@ const createKmsSecretsSummaryHtml = (kmsKeys, secrets) => {
 
 // --- COMBINED OVERVIEW TABLE ---
 const renderCombinedOverviewTable = (kmsKeys, secrets) => {
-  return `
+  return html`
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div class="bg-white border border-gray-200 rounded-lg p-6">
         <h4 class="text-lg font-semibold text-gray-800 mb-4">KMS Keys Summary</h4>
@@ -274,7 +258,7 @@ const renderCombinedOverviewTable = (kmsKeys, secrets) => {
 // --- SECRETS MANAGER TABLE ---
 const renderSecretsManagerTable = (secrets) => {
   if (!secrets || secrets.length === 0) {
-    return `
+    return html`
       <div class="bg-white p-6 rounded-xl border border-gray-100">
         <div class="text-center">
           <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -283,55 +267,33 @@ const renderSecretsManagerTable = (secrets) => {
           <h3 class="mt-2 text-sm font-medium text-gray-900">No secrets found</h3>
           <p class="mt-1 text-sm text-gray-500">No secrets were found in AWS Secrets Manager.</p>
         </div>
-      </div>
-    `;
+      </div>`;
   }
 
-  let tableHtml = `
-    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
-          <tr>
-            <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rotation</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">KMS Key</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Risk Score</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Accessed</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
-  `;
-
-  secrets
+  const rows = secrets
     .sort((a, b) => a.Region.localeCompare(b.Region) || a.Name.localeCompare(b.Name))
-    .forEach((secret, index) => {
+    .map((secret, index) => {
       const isScoped = !!window.scopedResources[secret.ARN];
+      const rowClass = isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50';
       if (secret.Error) {
-        tableHtml += `
-          <tr class="${isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50'}">
+        return html`
+          <tr class="${rowClass}">
             <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${createScopeButton(secret.ARN)}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${secret.Region}</td>
             <td class="px-4 py-4 text-sm font-medium text-gray-800">${secret.Name}</td>
             <td class="px-4 py-4 text-sm text-red-600" colspan="6">${secret.Error}</td>
-          </tr>
-        `;
-        return;
+          </tr>`;
       }
 
       const rotationBadge = secret.RotationEnabled
-        ? '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Enabled</span>'
-        : '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Disabled</span>';
-
+        ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Enabled</span>`
+        : html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Disabled</span>`;
       const riskBadge = getRiskBadge(secret.RiskScore || 0);
       const kmsKeyDisplay = secret.KmsKeyId.includes('alias/aws/secretsmanager') ? 'AWS Managed' : 'Customer Managed';
       const lastAccessed = secret.LastAccessedDate ? new Date(secret.LastAccessedDate).toLocaleDateString() : 'Never';
 
-      tableHtml += `
-        <tr class="${isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50'}">
+      return html`
+        <tr class="${rowClass}">
           <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${createScopeButton(secret.ARN)}</td>
           <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${secret.Region}</td>
           <td class="px-4 py-4 text-sm font-medium text-gray-800 break-words max-w-xs">${secret.Name}</td>
@@ -341,24 +303,34 @@ const renderSecretsManagerTable = (secrets) => {
           <td class="px-4 py-4 whitespace-nowrap text-sm">${riskBadge}</td>
           <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${lastAccessed}</td>
           <td class="px-4 py-4 whitespace-nowrap text-sm">
-            <button 
-              onclick="openModalWithSecretDetails(${index})" 
-              class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition">
-              View Details
-            </button>
+            <button ${act('openModalWithSecretDetails', index)} class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition">View Details</button>
           </td>
-        </tr>
-      `;
+        </tr>`;
     });
 
-  tableHtml += '</tbody></table></div>';
-  return tableHtml;
+  return html`
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50"><tr>
+          <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rotation</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">KMS Key</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Risk Score</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Accessed</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+        </tr></thead>
+        <tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody>
+      </table>
+    </div>`;
 };
 
 // --- CUSTOMER MANAGED KEYS TABLE ---
 const renderCustomerManagedKeysTable = (keys) => {
   if (!keys || keys.length === 0) {
-    return `
+    return html`
       <div class="bg-white p-6 rounded-xl border border-gray-100">
         <div class="text-center">
           <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -376,7 +348,7 @@ const renderCustomerManagedKeysTable = (keys) => {
 // --- AWS MANAGED KEYS TABLE ---
 const renderAwsManagedKeysTable = (keys) => {
   if (!keys || keys.length === 0) {
-    return `
+    return html`
       <div class="bg-white p-6 rounded-xl border border-gray-100">
         <div class="text-center">
           <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -394,35 +366,21 @@ const renderAwsManagedKeysTable = (keys) => {
 // --- ROTATION ANALYSIS TABLE ---
 const renderRotationAnalysisTable = (customerKeys, secrets) => {
   const rotationIssues = [];
-  
+
   customerKeys.forEach(key => {
     if (key.RotationEnabled === 'Disabled') {
-      rotationIssues.push({
-        type: 'KMS Key',
-        resource: key.Aliases || key.KeyId,
-        region: key.Region,
-        issue: 'Rotation disabled',
-        recommendation: 'Enable automatic key rotation',
-        severity: 'Medium'
-      });
+      rotationIssues.push({ type: 'KMS Key', resource: key.Aliases || key.KeyId, region: key.Region, issue: 'Rotation disabled', recommendation: 'Enable automatic key rotation', severity: 'Medium' });
     }
   });
-  
+
   secrets.forEach(secret => {
     if (!secret.RotationEnabled && !secret.Error) {
-      rotationIssues.push({
-        type: 'Secret',
-        resource: secret.Name,
-        region: secret.Region,
-        issue: 'Rotation disabled',
-        recommendation: 'Enable automatic secret rotation',
-        severity: secret.OwningService ? 'Low' : 'High'
-      });
+      rotationIssues.push({ type: 'Secret', resource: secret.Name, region: secret.Region, issue: 'Rotation disabled', recommendation: 'Enable automatic secret rotation', severity: secret.OwningService ? 'Low' : 'High' });
     }
   });
-  
+
   if (rotationIssues.length === 0) {
-    return `
+    return html`
       <div class="bg-white p-6 rounded-xl border border-gray-100">
         <div class="text-center">
           <svg class="mx-auto h-12 w-12 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -431,111 +389,91 @@ const renderRotationAnalysisTable = (customerKeys, secrets) => {
           <h3 class="mt-2 text-sm font-medium text-gray-900">Excellent rotation hygiene!</h3>
           <p class="mt-1 text-sm text-gray-500">All KMS keys and secrets have appropriate rotation settings.</p>
         </div>
-      </div>
-    `;
+      </div>`;
   }
 
-  let tableHtml = `
+  const rows = rotationIssues.map(issue => html`
+    <tr class="hover:bg-gray-50">
+      <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${issue.type}</td>
+      <td class="px-4 py-4 text-sm text-gray-800 break-words max-w-xs">${issue.resource}</td>
+      <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${issue.region}</td>
+      <td class="px-4 py-4 text-sm text-gray-600">${issue.issue}</td>
+      <td class="px-4 py-4 whitespace-nowrap text-sm">${getSeverityBadge(issue.severity)}</td>
+      <td class="px-4 py-4 text-sm text-gray-600">${issue.recommendation}</td>
+    </tr>`);
+
+  return html`
     <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
       <div class="mb-4">
         <h4 class="text-lg font-semibold text-gray-800">Rotation Issues Found: ${rotationIssues.length}</h4>
         <p class="text-sm text-gray-600">Resources that should have automatic rotation enabled</p>
       </div>
       <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
-          <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Resource</th>
-            <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issue</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Severity</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recommendation</th>
-          </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
-  `;
-  
-  rotationIssues.forEach(issue => {
-    const isScoped = false;
-    const severityBadge = getSeverityBadge(issue.severity);
-    
-    tableHtml += `
-      <tr class="${isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50'}">
-        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${issue.type}</td>
-        <td class="px-4 py-4 text-sm text-gray-800 break-words max-w-xs">${issue.resource}</td>
-        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${issue.region}</td>
-        <td class="px-4 py-4 text-sm text-gray-600">${issue.issue}</td>
-        <td class="px-4 py-4 whitespace-nowrap text-sm">${severityBadge}</td>
-        <td class="px-4 py-4 text-sm text-gray-600">${issue.recommendation}</td>
-      </tr>
-    `;
-  });
-  
-  tableHtml += '</tbody></table></div>';
-  return tableHtml;
+        <thead class="bg-gray-50"><tr>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Resource</th>
+          <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issue</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Severity</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recommendation</th>
+        </tr></thead>
+        <tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody>
+      </table>
+    </div>`;
 };
 
 // --- KMS KEYS TABLE ---
 const renderKmsKeysTable = (keys, title) => {
   if (!keys || keys.length === 0) {
-    return '<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No KMS keys were found.</p></div>';
+    return html`<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No KMS keys were found.</p></div>`;
   }
 
-  let tableHtml = `
-    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
-          <tr>
-            <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Alias</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Key ID</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">State</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rotation</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Manager</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Key Policy</th>
-          </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
-  `;
-  
-  keys
+  const rows = keys
     .sort((a, b) => a.Region.localeCompare(b.Region) || a.Aliases.localeCompare(b.Aliases))
-    .forEach((k, index) => {
-      const isScoped = !!window.scopedResources[k.ARN];
-      const rotationBadge = createKmsStatusBadge(k.RotationEnabled, 'rotation');
-      const stateBadge = createKmsStatusBadge(k.Status, 'state');
-      
-      const managerBadge = k.KeyManager === 'CUSTOMER'
-        ? '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">CUSTOMER</span>'
-        : '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">AWS</span>';
-      
-      tableHtml += `
+    .map((key, index) => {
+      const isScoped = !!window.scopedResources[key.ARN];
+      const rotationBadge = createKmsStatusBadge(key.RotationEnabled, 'rotation');
+      const stateBadge = createKmsStatusBadge(key.Status, 'state');
+      const managerBadge = key.KeyManager === 'CUSTOMER'
+        ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">CUSTOMER</span>`
+        : html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">AWS</span>`;
+
+      return html`
         <tr class="${isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50'}">
-          <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${createScopeButton(k.ARN)}</td>
-          <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600">${k.Region}</td>
-          <td class="px-4 py-4 align-top text-sm font-medium text-gray-800 break-words">${k.Aliases}</td>
-          <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600 font-mono">${k.KeyId}</td>
+          <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${createScopeButton(key.ARN)}</td>
+          <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600">${key.Region}</td>
+          <td class="px-4 py-4 align-top text-sm font-medium text-gray-800 break-words">${key.Aliases}</td>
+          <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600 font-mono">${key.KeyId}</td>
           <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${stateBadge}</td>
           <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${rotationBadge}</td>
           <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${managerBadge}</td>
           <td class="px-4 py-4 align-top whitespace-nowrap text-sm">
-            <button 
-              onclick="openModalWithKmsPolicy(${index})" 
-              class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition">
-              View Policy
-            </button>
+            <button ${act('openModalWithKmsPolicy', index)} class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition">View Policy</button>
           </td>
-        </tr>
-      `;
+        </tr>`;
     });
-  tableHtml += '</tbody></table></div>';
-  return tableHtml;
+
+  return html`
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50"><tr>
+          <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Alias</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Key ID</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">State</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rotation</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Manager</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Key Policy</th>
+        </tr></thead>
+        <tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody>
+      </table>
+    </div>`;
 };
 
 // --- EMPTY STATE ---
-const createEmptyState = () => `
+const createEmptyState = () => html`
   <div class="text-center py-16 bg-white rounded-lg">
     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -548,52 +486,52 @@ const createEmptyState = () => `
 // --- UTILITY FUNCTIONS ---
 const getRiskBadge = (riskScore) => {
   if (riskScore >= 80) {
-    return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Critical</span>';
+    return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Critical</span>`;
   } else if (riskScore >= 60) {
-    return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">High</span>';
+    return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">High</span>`;
   } else if (riskScore >= 40) {
-    return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Medium</span>';
+    return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Medium</span>`;
   } else if (riskScore >= 20) {
-    return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">Low</span>';
+    return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">Low</span>`;
   } else {
-    return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Minimal</span>';
+    return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Minimal</span>`;
   }
 };
 
 const getSeverityBadge = (severity) => {
   switch (severity.toLowerCase()) {
     case 'high':
-      return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">High</span>';
+      return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">High</span>`;
     case 'medium':
-      return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Medium</span>';
+      return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Medium</span>`;
     case 'low':
-      return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">Low</span>';
+      return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">Low</span>`;
     default:
-      return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">Unknown</span>';
+      return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">Unknown</span>`;
   }
 };
 
 const createKmsStatusBadge = (value, type = 'default') => {
   if (type === 'rotation') {
     if (value === 'Enabled') {
-      return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Enabled</span>';
+      return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Enabled</span>`;
     } else if (value === 'Disabled') {
-      return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Disabled</span>';
+      return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Disabled</span>`;
     } else {
-      return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">N/A</span>';
+      return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">N/A</span>`;
     }
   } else if (type === 'state') {
     if (value === 'Enabled') {
-      return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Enabled</span>';
+      return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Enabled</span>`;
     } else if (value === 'Disabled') {
-      return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Disabled</span>';
+      return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Disabled</span>`;
     } else if (value === 'PendingDeletion') {
-      return '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">Pending Deletion</span>';
+      return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">Pending Deletion</span>`;
     } else {
-      return `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">${value}</span>`;
+      return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">${value}</span>`;
     }
   } else {
-    return `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">${value}</span>`;
+    return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">${value}</span>`;
   }
 };
 
@@ -609,11 +547,15 @@ export const openModalWithKmsPolicy = (keyIndex) => {
   modalTitle.textContent = `Key Policy for: ${key.Aliases || key.KeyId}`;
   const formattedPolicy = JSON.stringify(key.Policy, null, 2);
 
-  modalContent.innerHTML = `
-    <div class="text-left">
-      <pre class="bg-[#204071] text-white text-xs font-mono rounded-md p-3 overflow-x-auto"><code>${formattedPolicy}</code></pre>
-    </div>
-  `;
+  const pre = document.createElement('pre');
+  pre.className = 'bg-[#204071] text-white text-xs font-mono rounded-md p-3 overflow-x-auto';
+  const code = document.createElement('code');
+  code.textContent = formattedPolicy;
+  pre.append(code);
+  const wrapper = document.createElement('div');
+  wrapper.className = 'text-left';
+  wrapper.append(pre);
+  modalContent.replaceChildren(document.createTextNode(' '), wrapper);
   modal.classList.remove('hidden');
 };
 
@@ -631,7 +573,18 @@ export const openModalWithSecretDetails = (secretIndex) => {
   const securityIssues = secret.SecurityIssues || [];
   const rotationAnalysis = secret.RotationAnalysis || {};
 
-  modalContent.innerHTML = `
+  const rotationIssueItems = (rotationAnalysis.issues || []).map(issue => html`<li>• ${issue}</li>`);
+  const recommendationItems = (rotationAnalysis.recommendations || []).map(rec => html`<li>• ${rec}</li>`);
+  const securityIssueItems = securityIssues.map(issue => html`<div class="border-l-4 ${issue.severity === 'high' ? 'border-red-400' : issue.severity === 'medium' ? 'border-yellow-400' : 'border-blue-400'} pl-4"><div class="flex justify-between items-start"><h5 class="text-sm font-medium text-gray-800">${issue.type.replace('_', ' ').toUpperCase()}</h5> ${getSeverityBadge(issue.severity)}</div> <p class="text-sm text-gray-600 mt-1">${issue.description}</p> <p class="text-sm text-blue-600 mt-1"><strong>Recommendation:</strong> ${issue.recommendation}</p></div>`);
+  const tagItems = (secret.Tags || []).map(tag => html`<div class="bg-white rounded px-3 py-2 border"><span class="text-sm font-medium text-gray-600">${tag.Key}:</span> <span class="text-sm text-gray-800">${tag.Value}</span></div>`);
+  const lambdaSection = secret.RotationLambdaARN ? html`<div><span class="text-sm font-medium text-gray-600">Lambda Function:</span> <p class="text-sm text-gray-800 font-mono break-all">${secret.RotationLambdaARN}</p></div>` : html``;
+  const intervalSection = rotationRules.AutomaticallyAfterDays ? html`<div><span class="text-sm font-medium text-gray-600">Rotation Interval:</span> <p class="text-sm text-gray-800">${rotationRules.AutomaticallyAfterDays} days</p></div>` : html``;
+  const rotationIssuesSection = rotationIssueItems.length ? html`<div class="mt-4"><h5 class="text-sm font-medium text-red-700 mb-2">Rotation Issues:</h5> <ul class="text-sm text-red-600 space-y-1">${join(rotationIssueItems, ' ')}</ul></div>` : html``;
+  const recommendationsSection = recommendationItems.length ? html`<div class="mt-4"><h5 class="text-sm font-medium text-blue-700 mb-2">Recommendations:</h5> <ul class="text-sm text-blue-600 space-y-1">${join(recommendationItems, ' ')}</ul></div>` : html``;
+  const securitySection = securityIssueItems.length ? html`<div class="bg-yellow-50 rounded-lg p-4"><h4 class="text-lg font-semibold text-gray-800 mb-3">Security Issues</h4> <div class="space-y-3">${join(securityIssueItems, ' ')} </div></div>` : html``;
+  const policySection = secret.ResourcePolicy && typeof secret.ResourcePolicy === 'object' ? html`<div class="bg-gray-50 rounded-lg p-4"><h4 class="text-lg font-semibold text-gray-800 mb-3">Resource Policy</h4> <pre class="bg-[#204071] text-white text-xs font-mono rounded-md p-3 overflow-x-auto"><code>${JSON.stringify(secret.ResourcePolicy, null, 2)}</code></pre></div>` : html``;
+  const tagsSection = tagItems.length ? html`<div class="bg-green-50 rounded-lg p-4"><h4 class="text-lg font-semibold text-gray-800 mb-3">Tags</h4> <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${join(tagItems, ' ')}</div></div>` : html``;
+  setHtml(modalContent, html`
     <div class="text-left space-y-6">
       <!-- Basic Information -->
       <div class="bg-gray-50 rounded-lg p-4">
@@ -671,19 +624,10 @@ export const openModalWithSecretDetails = (secretIndex) => {
           <div>
             <span class="text-sm font-medium text-gray-600">Rotation Enabled:</span>
             <p class="text-sm">${secret.RotationEnabled ? 
-              '<span class="text-green-600 font-semibold">Yes</span>' : 
-              '<span class="text-red-600 font-semibold">No</span>'}</p>
+              html`<span class="text-green-600 font-semibold">Yes</span>` : 
+              html`<span class="text-red-600 font-semibold">No</span>`}</p>
           </div>
-          ${secret.RotationLambdaARN ? `
-          <div>
-            <span class="text-sm font-medium text-gray-600">Lambda Function:</span>
-            <p class="text-sm text-gray-800 font-mono break-all">${secret.RotationLambdaARN}</p>
-          </div>` : ''}
-          ${rotationRules.AutomaticallyAfterDays ? `
-          <div>
-            <span class="text-sm font-medium text-gray-600">Rotation Interval:</span>
-            <p class="text-sm text-gray-800">${rotationRules.AutomaticallyAfterDays} days</p>
-          </div>` : ''}
+          ${join([lambdaSection, intervalSection], ' ')}
           <div>
             <span class="text-sm font-medium text-gray-600">Last Rotated:</span>
             <p class="text-sm text-gray-800">${secret.LastRotatedDate ? 
@@ -691,65 +635,21 @@ export const openModalWithSecretDetails = (secretIndex) => {
           </div>
         </div>
         
-        ${rotationAnalysis.issues && rotationAnalysis.issues.length > 0 ? `
-        <div class="mt-4">
-          <h5 class="text-sm font-medium text-red-700 mb-2">Rotation Issues:</h5>
-          <ul class="text-sm text-red-600 space-y-1">
-            ${rotationAnalysis.issues.map(issue => `<li>• ${issue}</li>`).join('')}
-          </ul>
-        </div>` : ''}
+        ${rotationIssuesSection}
         
-        ${rotationAnalysis.recommendations && rotationAnalysis.recommendations.length > 0 ? `
-        <div class="mt-4">
-          <h5 class="text-sm font-medium text-blue-700 mb-2">Recommendations:</h5>
-          <ul class="text-sm text-blue-600 space-y-1">
-            ${rotationAnalysis.recommendations.map(rec => `<li>• ${rec}</li>`).join('')}
-          </ul>
-        </div>` : ''}
+        ${recommendationsSection}
       </div>
 
       <!-- Security Analysis -->
-      ${securityIssues.length > 0 ? `
-      <div class="bg-yellow-50 rounded-lg p-4">
-        <h4 class="text-lg font-semibold text-gray-800 mb-3">Security Issues</h4>
-        <div class="space-y-3">
-          ${securityIssues.map(issue => `
-            <div class="border-l-4 ${issue.severity === 'high' ? 'border-red-400' : 
-                                    issue.severity === 'medium' ? 'border-yellow-400' : 
-                                    'border-blue-400'} pl-4">
-              <div class="flex justify-between items-start">
-                <h5 class="text-sm font-medium text-gray-800">${issue.type.replace('_', ' ').toUpperCase()}</h5>
-                ${getSeverityBadge(issue.severity)}
-              </div>
-              <p class="text-sm text-gray-600 mt-1">${issue.description}</p>
-              <p class="text-sm text-blue-600 mt-1"><strong>Recommendation:</strong> ${issue.recommendation}</p>
-            </div>
-          `).join('')}
-        </div>
-      </div>` : ''}
+      ${securitySection}
 
       <!-- Resource Policy -->
-      ${secret.ResourcePolicy && typeof secret.ResourcePolicy === 'object' ? `
-      <div class="bg-gray-50 rounded-lg p-4">
-        <h4 class="text-lg font-semibold text-gray-800 mb-3">Resource Policy</h4>
-        <pre class="bg-[#204071] text-white text-xs font-mono rounded-md p-3 overflow-x-auto"><code>${JSON.stringify(secret.ResourcePolicy, null, 2)}</code></pre>
-      </div>` : ''}
+      ${policySection}
 
       <!-- Tags -->
-      ${secret.Tags && secret.Tags.length > 0 ? `
-      <div class="bg-green-50 rounded-lg p-4">
-        <h4 class="text-lg font-semibold text-gray-800 mb-3">Tags</h4>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-          ${secret.Tags.map(tag => `
-            <div class="bg-white rounded px-3 py-2 border">
-              <span class="text-sm font-medium text-gray-600">${tag.Key}:</span>
-              <span class="text-sm text-gray-800">${tag.Value}</span>
-            </div>
-          `).join('')}
-        </div>
-      </div>` : ''}
+      ${tagsSection}
     </div>
-  `;
+  `);
 
   modal.classList.remove('hidden');
 };
@@ -762,10 +662,11 @@ const createScopeButton = (arn) => {
   const scopeDetails = window.scopedResources[arn];
   const isScoped = !!scopeDetails;
   const scopeComment = isScoped ? scopeDetails.comment : '';
-  
-  const scopeIcon = isScoped 
-    ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>` 
-    : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`;
-  
-  return `<button onclick="openScopeModal('${arn}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
+
+  const scopeIcon = isScoped
+    ? html`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`
+    : html`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`;
+
+  const title = isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso';
+  return html`<button ${act('openScopeModal', arn, encodeURIComponent(scopeComment))} title="${title}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
 };

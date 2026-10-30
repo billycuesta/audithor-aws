@@ -5,6 +5,7 @@
 
 // --- IMPORTACIONES ---
 import { handleTabClick, createStatusBadge } from '../utils.js';
+import { html, join, setHtml, act, ACT_THIS, raw, escapeHtml } from '../safe_html.js';
 
 
 // --- FUNCIÓN PRINCIPAL DE LA VISTA (EXPORTADA) ---
@@ -17,7 +18,7 @@ export const buildComputeView = () => {
     const { ec2_instances, lambda_functions, eks_clusters, ecs_clusters } = window.computeApiData.results;
     const allRegions = window.allAvailableRegions;
 
-    container.innerHTML = `
+    setHtml(container, html`
         <header class="flex justify-between items-center mb-6">
             <div>
                 <h2 class="text-2xl font-bold text-[#204071]">Compute Resources</h2>
@@ -40,15 +41,15 @@ export const buildComputeView = () => {
             <div id="compute-eks-content" class="compute-tab-content hidden">${renderEksClustersTable(eks_clusters)}</div>
             <div id="compute-ecs-content" class="compute-tab-content hidden">${renderEcsClustersTable(ecs_clusters)}</div>
         </div>
-    `;
+    `);
 
     updateComputeSummaryCards(ec2_instances, lambda_functions, eks_clusters, ecs_clusters);
 
     const ec2TabContent = document.getElementById('compute-ec2-content');
-    ec2TabContent.innerHTML = renderEc2InstancesTable(ec2_instances, allRegions, 'all', 'all');
+    setHtml(ec2TabContent, renderEc2InstancesTable(ec2_instances, allRegions, 'all', 'all'));
 
     const lambdaTabContent = document.getElementById('compute-lambda-content');
-    lambdaTabContent.innerHTML = renderLambdaFunctionsTable(lambda_functions, lambda_functions, 'all', 'all');
+    setHtml(lambdaTabContent, renderLambdaFunctionsTable(lambda_functions, lambda_functions, 'all', 'all'));
     
     setupEc2Filters();
     setupLambdaFilters();
@@ -79,7 +80,7 @@ export const buildComputeView = () => {
 
 // --- FUNCIONES INTERNAS DEL MÓDULO (NO SE EXPORTAN) ---
 
-const createComputeSummaryCardsHtml = () => `
+const createComputeSummaryCardsHtml = () => html`
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
         <div class="bg-white border border-gray-100 p-5 rounded-xl shadow-sm flex flex-col justify-between h-full">
             <div><p class="text-sm text-gray-500">EC2 Instances</p></div>
@@ -136,255 +137,114 @@ const updateComputeSummaryCards = (ec2s, lambdas, eks, ecs) => {
 };
 
 const renderEc2InstancesTable = (instances, allRegions, selectedState = 'all', selectedRegion = 'all') => {
-    const regionOptions = allRegions.map(r => `<option value="${r}" ${selectedRegion === r ? 'selected' : ''}>${r}</option>`).join('');
-
-    const filterControlsHtml = `
-        <div class="mb-4 flex flex-wrap gap-4 items-center">
-            <div class="flex items-center space-x-2">
-                <span class="text-sm font-medium text-gray-700">Status:</span>
-                <div class="flex space-x-2">
-                    <button data-state="all" class="ec2-filter-btn px-3 py-1 text-sm font-semibold rounded-md shadow-sm ${selectedState === 'all' ? 'bg-[#eb3496] text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}">All</button>
-                    <button data-state="running" class="ec2-filter-btn px-3 py-1 text-sm font-semibold rounded-md shadow-sm ${selectedState === 'running' ? 'bg-[#eb3496] text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}">Running</button>
-                    <button data-state="stopped" class="ec2-filter-btn px-3 py-1 text-sm font-semibold rounded-md shadow-sm ${selectedState === 'stopped' ? 'bg-[#eb3496] text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}">Stopped</button>
-                </div>
-            </div>
-            <div class="flex items-center space-x-2">
-                <label for="ec2-region-filter" class="text-sm font-medium text-gray-700">Region:</label>
-                <select id="ec2-region-filter" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-[#eb3496] focus:border-[#eb3496] block p-1.5">
-                    <option value="all" ${selectedRegion === 'all' ? 'selected' : ''}>All Regions</option>
-                    ${regionOptions}
-                </select>
-            </div>
-        </div>`;
-
-    if (!instances || instances.length === 0) {
-        return `<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">${filterControlsHtml}<p class="text-center text-gray-500 py-4">No EC2 instances matching the selected filters were found.</p></div>`;
-    }
-
-    let tableContent = '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
-                '<th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Instance ID</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPC ID</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Security Groups</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IAM Role</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">State</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Public IP</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">OS</th>' +
-                '<th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">ARN</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tags</th>' +
-                '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-
-    instances.forEach((i) => {
+    const regionOptions = allRegions.map(region => html`<option value="${region}" ${selectedRegion === region ? 'selected' : ''}>${region}</option>`);
+    const filterControlsHtml = html`<div class="mb-4 flex flex-wrap gap-4 items-center"><div class="flex items-center space-x-2"><span class="text-sm font-medium text-gray-700">Status:</span> <div class="flex space-x-2">
+        <button data-state="all" class="ec2-filter-btn px-3 py-1 text-sm font-semibold rounded-md shadow-sm ${selectedState === 'all' ? 'bg-[#eb3496] text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}">All</button>
+        <button data-state="running" class="ec2-filter-btn px-3 py-1 text-sm font-semibold rounded-md shadow-sm ${selectedState === 'running' ? 'bg-[#eb3496] text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}">Running</button>
+        <button data-state="stopped" class="ec2-filter-btn px-3 py-1 text-sm font-semibold rounded-md shadow-sm ${selectedState === 'stopped' ? 'bg-[#eb3496] text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}">Stopped</button>
+    </div></div><div class="flex items-center space-x-2"><label for="ec2-region-filter" class="text-sm font-medium text-gray-700">Region:</label> <select id="ec2-region-filter" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-[#eb3496] focus:border-[#eb3496] block p-1.5"><option value="all" ${selectedRegion === 'all' ? 'selected' : ''}>All Regions</option> ${join(regionOptions)}</select> </div></div>`;
+    if (!instances || instances.length === 0) return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">${filterControlsHtml}<p class="text-center text-gray-500 py-4">No EC2 instances matching the selected filters were found.</p></div>`;
+    const rows = instances.map(i => {
         const originalIndex = window.computeApiData.results.ec2_instances.findIndex(orig => orig.ARN === i.ARN);
-        const tagCount = Object.keys(i.Tags).length;
-        const sgCount = i.SecurityGroups ? i.SecurityGroups.length : 0;
-        let sgHtml = '-';
-        if (sgCount > 0) {
-            sgHtml = i.SecurityGroups.map(sgId => 
-                `<div class="bg-gray-100 text-gray-800 text-xs font-mono px-2 py-0.5 rounded mb-1 whitespace-nowrap">${sgId}</div>`
-            ).join('');
-        }
-        let tagsHtml = '-';
-        if (tagCount > 0) {
-            tagsHtml = `<button 
-                            onclick="openModalWithEc2Tags(${originalIndex})" 
-                            class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition whitespace-nowrap">
-                            View (${tagCount})
-                        </button>`;
-        }
-
-        const scopeDetails = window.scopedResources[i.ARN];
-        const isScoped = !!scopeDetails;
-        const rowClass = isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50';
-        const scopeComment = isScoped ? scopeDetails.comment : '';
-        const scopeIcon = isScoped 
-            ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>` 
-            : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`;
-        const scopeButton = `<button onclick="openScopeModal('${i.ARN}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
-
-
-        tableContent += `<tr class="${rowClass}">
-                    <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${i.Region}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${i.InstanceId}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-600">${i.VpcId || 'N/A'}</td>
-                    <td class="px-4 py-4 text-sm">${sgHtml}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-600">${i.IamInstanceProfile}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(i.State)}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${i.PublicIpAddress || '-'}</td>
-                    <td class="px-4 py-4 text-sm text-gray-600 break-words">${i.OperatingSystem}</td>
-                    <td class="px-4 py-4 text-center">
-                        <button onclick="copyToClipboard(this, '${i.ARN}')" title="${i.ARN}" class="p-1 rounded-md hover:bg-gray-200 transition">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard w-5 h-5 text-gray-500" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
-                        </button>
-                    </td>
-                    <td class="px-4 py-4 text-sm text-gray-600">${tagsHtml}</td>
-                </tr>`;
+        const tags = Object.keys(i.Tags || {}).length ? html`<button ${act('openModalWithEc2Tags', originalIndex)} class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition whitespace-nowrap">View (${Object.keys(i.Tags || {}).length})</button>` : '-';
+        const isScoped = !!window.scopedResources[i.ARN];
+        const scopeComment = isScoped ? window.scopedResources[i.ARN].comment : '';
+        // This SVG is fixed trusted icon markup.
+        const scopeIcon = raw(isScoped
+            ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>'
+            : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>');
+        const scopeButton = html`<button ${act('openScopeModal', i.ARN, encodeURIComponent(scopeComment))} title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
+        const groups = i.SecurityGroups?.length ? join(i.SecurityGroups.map(id => html`<div class="bg-gray-100 text-gray-800 text-xs font-mono px-2 py-0.5 rounded mb-1 whitespace-nowrap">${id}</div>`)) : '-';
+        return html`<tr class="${isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50'}"><td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td> <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${i.Region}</td> <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${i.InstanceId}</td> <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-600">${i.VpcId || 'N/A'}</td> <td class="px-4 py-4 text-sm">${groups}</td> <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-600">${i.IamInstanceProfile}</td> <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(i.State)}</td> <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${i.PublicIpAddress || '-'}</td> <td class="px-4 py-4 text-sm text-gray-600 break-words">${i.OperatingSystem}</td> <td class="px-4 py-4 text-center"><button ${act('copyToClipboard', ACT_THIS, i.ARN)} title="${i.ARN}" class="p-1 rounded-md hover:bg-gray-200 transition"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard w-5 h-5 text-gray-500" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg></button></td> <td class="px-4 py-4 text-sm text-gray-600">${tags}</td></tr>`;
     });
-    tableContent += '</tbody></table></div>';
-
-    return `<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">${filterControlsHtml}${tableContent}</div>`;
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">${filterControlsHtml}<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Instance ID</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPC ID</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Security Groups</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IAM Role</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">State</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Public IP</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">OS</th><th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">ARN</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tags</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div></div>`;
 };
 
 const renderLambdaFunctionsTable = (functionsToRender, allFunctions, selectedRegion = 'all', selectedVpc = 'all') => {
     const allRegions = [...new Set(allFunctions.map(f => f.Region))].sort();
     const allVpcs = [...new Set(allFunctions.map(f => f.VpcConfig?.VpcId).filter(Boolean))].sort();
-
-    const regionOptions = allRegions.map(r => `<option value="${r}" ${selectedRegion === r ? 'selected' : ''}>${r}</option>`).join('');
-    const vpcOptions = allVpcs.map(v => `<option value="${v}" ${selectedVpc === v ? 'selected' : ''}>${v}</option>`).join('');
-
-    const filterControlsHtml = `
+    const regionOptions = allRegions.map(r => html`<option value="${r}" ${selectedRegion === r ? 'selected' : ''}>${r}</option>`);
+    const vpcOptions = allVpcs.map(v => html`<option value="${v}" ${selectedVpc === v ? 'selected' : ''}>${v}</option>`);
+    const filterControlsHtml = html`
         <div class="mb-4 flex flex-wrap gap-4 items-center">
             <div class="flex items-center space-x-2">
                 <label for="lambda-region-filter" class="text-sm font-medium text-gray-700">Region:</label>
                 <select id="lambda-region-filter" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-[#eb3496] focus:border-[#eb3496] block p-1.5">
-                    <option value="all">All Regions</option>
-                    ${regionOptions}
+                    <option value="all">All Regions</option> ${join(regionOptions)}
                 </select>
             </div>
             <div class="flex items-center space-x-2">
                 <label for="lambda-vpc-filter" class="text-sm font-medium text-gray-700">VPC:</label>
                 <select id="lambda-vpc-filter" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-[#eb3496] focus:border-[#eb3496] block p-1.5">
-                    <option value="all">All VPCs</option>
-                    ${vpcOptions}
+                    <option value="all">All VPCs</option> ${join(vpcOptions)}
                 </select>
             </div>
         </div>`;
-
     if (!functionsToRender || functionsToRender.length === 0) {
-        return `<div class="bg-white p-6 rounded-xl border border-gray-100">${filterControlsHtml}<p class="text-center text-gray-500 py-4">No Lambda functions matching the selected filters were found.</p></div>`;
+        return html`<div class="bg-white p-6 rounded-xl border border-gray-100">${filterControlsHtml}<p class="text-center text-gray-500 py-4">No Lambda functions matching the selected filters were found.</p></div>`;
     }
 
-    let tableHtml = '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
-                '<th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Function Name</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Execution Role</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Runtime</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPC ID</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tags</th>' +
-                '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-    
     const allFunctionsForIndexing = window.computeApiData.results.lambda_functions;
     const allIamRoles = window.iamApiData.results.roles;
-
-    functionsToRender.forEach(f => {
+    const rows = functionsToRender.map(f => {
         const originalIndex = allFunctionsForIndexing.findIndex(orig => orig.ARN === f.ARN);
         const vpcId = f.VpcConfig?.VpcId || 'N/A';
         const tagCount = Object.keys(f.Tags || {}).length;
-        
         const roleName = f.Role ? f.Role.split('/').pop() : null;
         const roleDetails = roleName ? allIamRoles.find(r => r.RoleName === roleName) : null;
-        const vipBadge = (roleDetails && roleDetails.IsPrivileged) 
-            ? '<span class="bg-yellow-200 text-yellow-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">VIP</span>' 
-            : '';
-
-        let tagsHtml = '-';
-        if (tagCount > 0) {
-            tagsHtml = `<button 
-                            onclick="openModalWithLambdaTags(${originalIndex})" 
-                            class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition whitespace-nowrap">
-                            View (${tagCount})
-                        </button>`;
-        }
-        
         const scopeDetails = window.scopedResources[f.ARN];
         const isScoped = !!scopeDetails;
-        const rowClass = isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50';
         const scopeComment = isScoped ? scopeDetails.comment : '';
-        const scopeIcon = isScoped 
-            ? `<svg xmlns="http://www.w.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>` 
-            : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`;
-        const scopeButton = `<button onclick="openScopeModal('${f.ARN}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
-
-
-
-        tableHtml += `
-            <tr class="${rowClass}">
-                <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
-                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${f.Region}</td>
-                <td class="px-4 py-4 text-sm font-medium text-gray-800 break-all">${vipBadge}${f.FunctionName}</td>
-                <td class="px-4 py-4 whitespace-nowrap text-sm">
-                    <button 
-                        onclick="openModalWithLambdaRole(${originalIndex})"
-                        class="bg-slate-200 text-slate-700 px-3 py-1 text-xs font-bold rounded-md hover:bg-slate-300 transition">
-                        View Role
-                    </button>
-                </td>
-                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${f.Runtime}</td>
-                <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-600">${vpcId}</td>
-                <td class="px-4 py-4 whitespace-nowrap text-sm">${tagsHtml}</td>
-            </tr>`;
+        // These fixed SVG paths are trusted static icons.
+        const scopeIcon = raw(isScoped
+            ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`
+            : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`);
+        const scopeButton = html`<button ${act('openScopeModal', f.ARN, encodeURIComponent(scopeComment))} title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
+        const vipBadge = roleDetails?.IsPrivileged ? html`<span class="bg-yellow-200 text-yellow-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">VIP</span>` : html``;
+        const tagsHtml = tagCount ? html`<button ${act('openModalWithLambdaTags', originalIndex)} class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition whitespace-nowrap">View (${tagCount})</button>` : '-';
+        return html`<tr class="${isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50'}">
+            <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${f.Region}</td>
+            <td class="px-4 py-4 text-sm font-medium text-gray-800 break-all">${vipBadge}${f.FunctionName}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm"><button ${act('openModalWithLambdaRole', originalIndex)} class="bg-slate-200 text-slate-700 px-3 py-1 text-xs font-bold rounded-md hover:bg-slate-300 transition">View Role</button></td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${f.Runtime}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-600">${vpcId}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm">${tagsHtml}</td>
+        </tr>`;
     });
-    
-    tableHtml += '</tbody></table></div>';
-    
-    return `<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">${filterControlsHtml}${tableHtml}</div>`;
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">${filterControlsHtml}<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Function Name</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Execution Role</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Runtime</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPC ID</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tags</th>
+    </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div></div>`;
 };
 
 const renderEksClustersTable = (clusters) => {
-    if (!clusters || clusters.length === 0) return '<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No EKS clusters were found.</p></div>';
-    let table = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
-                '<th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cluster Name</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ARN</th>' +
-                '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-    clusters.forEach(c => {
-        const scopeDetails = window.scopedResources[c.ARN];
-        const isScoped = !!scopeDetails;
-        const rowClass = isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50';
-        const scopeComment = isScoped ? scopeDetails.comment : '';
-        const scopeIcon = isScoped 
-            ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>` 
-            : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`;
-        const scopeButton = `<button onclick="openScopeModal('${c.ARN}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
-
-        table += `<tr class="${rowClass}">
-                    <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${c.Region}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${c.ClusterName}</td>
-                    <td class="px-4 py-4 text-sm text-gray-600 break-all font-mono">${c.ARN}</td>
-                </tr>`;
+    if (!clusters || clusters.length === 0) return html`<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No EKS clusters were found.</p></div>`;
+    const rows = clusters.map(c => {
+        const isScoped = !!window.scopedResources[c.ARN];
+        const scopeComment = isScoped ? window.scopedResources[c.ARN].comment : '';
+        // These SVGs are fixed trusted icon markup.
+        const scopeIcon = raw(isScoped
+            ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>'
+            : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>');
+        const scopeButton = html`<button ${act('openScopeModal', c.ARN, encodeURIComponent(scopeComment))} title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
+        return html`<tr class="${isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50'}"><td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td> <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${c.Region}</td> <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${c.ClusterName}</td> <td class="px-4 py-4 text-sm text-gray-600 break-all font-mono">${c.ARN}</td></tr>`;
     });
-
-    table += '</tbody></table></div>';
-    return table;
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cluster Name</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ARN</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`;
 };
 
 const renderEcsClustersTable = (clusters) => {
-    if (!clusters || clusters.length === 0) return '<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No ECS clusters were found.</p></div>';
-    let table = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
-                '<th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cluster Name</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"># Services</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ARN</th>' +
-                '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-
-    clusters.forEach(c => {
-    const scopeDetails = window.scopedResources[c.ARN];
-    const isScoped = !!scopeDetails;
-    const rowClass = isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50';
-    const scopeComment = isScoped ? scopeDetails.comment : '';
-    const scopeIcon = isScoped 
-        ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>` 
-        : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`;
-    const scopeButton = `<button onclick="openScopeModal('${c.ARN}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
-
-    table += `<tr class="${rowClass}">
-                <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
-                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${c.Region}</td>
-                <td class="px-4 py-4 text-sm font-medium text-gray-800 break-all">${c.ClusterName}</td>
-                <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(c.Status)}</td>
-                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${c.ServicesCount}</td>
-                <td class="px-4 py-4 text-sm text-gray-600 break-all font-mono">${c.ARN}</td>
-            </tr>`;
+    if (!clusters || clusters.length === 0) return html`<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No ECS clusters were found.</p></div>`;
+    const rows = clusters.map(c => {
+        const isScoped = !!window.scopedResources[c.ARN];
+        const scopeComment = isScoped ? window.scopedResources[c.ARN].comment : '';
+        // This SVG is fixed trusted icon markup.
+        const scopeIcon = raw(isScoped
+            ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>'
+            : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>');
+        const scopeButton = html`<button ${act('openScopeModal', c.ARN, encodeURIComponent(scopeComment))} title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
+        return html`<tr class="${isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50'}"><td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td> <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${c.Region}</td> <td class="px-4 py-4 text-sm font-medium text-gray-800 break-all">${c.ClusterName}</td> <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(c.Status)}</td> <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${c.ServicesCount}</td> <td class="px-4 py-4 text-sm text-gray-600 break-all font-mono">${c.ARN}</td></tr>`;
     });
-    table += '</tbody></table></div>';
-    return table;
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cluster Name</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"># Services</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ARN</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`;
 };
 
 const setupEc2Filters = () => {
@@ -405,7 +265,7 @@ const setupEc2Filters = () => {
             filteredInstances = filteredInstances.filter(i => i.Region === selectedRegion);
         }
 
-        ec2TabContent.innerHTML = renderEc2InstancesTable(filteredInstances, allRegions, selectedState, selectedRegion);
+        setHtml(ec2TabContent, renderEc2InstancesTable(filteredInstances, allRegions, selectedState, selectedRegion));
     };
 
     ec2TabContent.addEventListener('click', (e) => {
@@ -444,7 +304,7 @@ const setupLambdaFilters = () => {
             filteredFunctions = filteredFunctions.filter(f => f.VpcConfig?.VpcId === selectedVpc);
         }
 
-        lambdaTabContent.innerHTML = renderLambdaFunctionsTable(filteredFunctions, allFunctions, selectedRegion, selectedVpc);
+        setHtml(lambdaTabContent, renderLambdaFunctionsTable(filteredFunctions, allFunctions, selectedRegion, selectedVpc));
     };
 
     lambdaTabContent.addEventListener('input', (e) => {
@@ -466,23 +326,16 @@ export const openModalWithEc2Tags = (instanceIndex) => {
     modalTitle.textContent = `Tags for Instance: ${instance.InstanceId}`;
     const tags = instance.Tags;
     const tagCount = Object.keys(tags).length;
-    let tagsListHtml = '';
+    const tagRows = Object.entries(tags).map(([key, value]) => html`
+        <div class="flex items-center bg-slate-100 p-2 rounded-md text-sm">
+            <span class="font-bold text-slate-600 w-1/3">${key}:</span>
+            <span class="font-mono text-slate-800 w-2/3">${value}</span>
+        </div>`);
+    const tagsListHtml = tagCount > 0
+        ? html`<div class="space-y-2 text-left">${join(tagRows)}</div>`
+        : html`<p class="text-sm text-gray-500 text-center py-4">This instance has no tags.</p>`;
 
-    if (tagCount > 0) {
-        tagsListHtml = '<div class="space-y-2 text-left">';
-        for (const key in tags) {
-            tagsListHtml += `
-                <div class="flex items-center bg-slate-100 p-2 rounded-md text-sm">
-                    <span class="font-bold text-slate-600 w-1/3">${key}:</span>
-                    <span class="font-mono text-slate-800 w-2/3">${tags[key]}</span>
-                </div>`;
-        }
-        tagsListHtml += '</div>';
-    } else {
-        tagsListHtml = '<p class="text-sm text-gray-500 text-center py-4">This instance has no tags.</p>';
-    }
-
-    modalContent.innerHTML = tagsListHtml;
+    setHtml(modalContent, tagsListHtml);
     modal.classList.remove('hidden');
 };
 
@@ -497,23 +350,16 @@ export const openModalWithLambdaTags = (lambdaIndex) => {
     modalTitle.textContent = `Tags for Lambda: ${lambda.FunctionName}`;
     const tags = lambda.Tags;
     const tagCount = Object.keys(tags).length;
-    let tagsListHtml = '';
-
-    if (tagCount > 0) {
-        tagsListHtml = '<div class="space-y-2 text-left">';
-        for (const key in tags) {
-            tagsListHtml += `
-                <div class="flex items-center bg-slate-100 p-2 rounded-md text-sm">
-                    <span class="font-bold text-slate-600 w-1/3">${key}:</span>
-                    <span class="font-mono text-slate-800 w-2/3">${tags[key]}</span>
-                </div>`;
-        }
-        tagsListHtml += '</div>';
-    } else {
-        tagsListHtml = '<p class="text-sm text-gray-500 text-center py-4">This Lambda function has no tags.</p>';
-    }
+    const tagRows = Object.entries(tags).map(([key, value]) => html`
+        <div class="flex items-center bg-slate-100 p-2 rounded-md text-sm">
+            <span class="font-bold text-slate-600 w-1/3">${key}:</span>
+            <span class="font-mono text-slate-800 w-2/3">${value}</span>
+        </div>`);
+    const tagsListHtml = tagCount > 0
+        ? html`<div class="space-y-2 text-left">${join(tagRows)}</div>`
+        : html`<p class="text-sm text-gray-500 text-center py-4">This Lambda function has no tags.</p>`;
     
-    modalContent.innerHTML = tagsListHtml;
+    setHtml(modalContent, tagsListHtml);
     modal.classList.remove('hidden');
 };
 
@@ -530,25 +376,19 @@ export const openModalWithLambdaRole = (lambdaIndex) => {
     const roleName = roleArn ? roleArn.split('/').pop() : 'N/A';
     modalTitle.textContent = `Execution Role for: ${lambda.FunctionName}`;
 
-    let contentHtml = `<div class="space-y-3 text-left text-sm">
-                        <div class="flex items-center bg-slate-100 p-2 rounded-md">
-                            <span class="font-bold text-slate-600 w-1/3">Role Name:</span>
-                            <span class="font-mono text-slate-800 w-2/3">${roleName}</span>
-                        </div>`;
-
     const roleDetails = allRoles.find(r => r.RoleName === roleName);
-    if (roleDetails && roleDetails.IsPrivileged) {
-        const reasonsHtml = roleDetails.PrivilegeReasons.map(reason => 
-            `<li class="list-disc list-inside">${reason}</li>`
-        ).join('');
-        contentHtml += `<div class="bg-yellow-50 border border-yellow-200 p-3 rounded-md mt-2">
-                            <h4 class="font-bold text-yellow-800">Privileged Role</h4>
-                            <p class="text-xs text-yellow-700 mt-1">This role is considered privileged for the following reasons:</p>
-                            <ul class="text-xs text-yellow-700 mt-1">${reasonsHtml}</ul>
-                        </div>`;
-    }
-
-    contentHtml += `</div>`;
-    modalContent.innerHTML = contentHtml;
+    const reasons = roleDetails && roleDetails.IsPrivileged
+        ? html`<div class="bg-yellow-50 border border-yellow-200 p-3 rounded-md mt-2">
+                    <h4 class="font-bold text-yellow-800">Privileged Role</h4>
+                    <p class="text-xs text-yellow-700 mt-1">This role is considered privileged for the following reasons:</p>
+                    <ul class="text-xs text-yellow-700 mt-1">${join(roleDetails.PrivilegeReasons.map(reason => html`<li class="list-disc list-inside">${reason}</li>`))}</ul>
+                </div>`
+        : html``;
+    const contentHtml = html`<div class="space-y-3 text-left text-sm">
+        <div class="flex items-center bg-slate-100 p-2 rounded-md">
+            <span class="font-bold text-slate-600 w-1/3">Role Name:</span>
+            <span class="font-mono text-slate-800 w-2/3">${roleName}</span>
+        </div>${reasons}</div>`;
+    setHtml(modalContent, contentHtml);
     modal.classList.remove('hidden');
 };

@@ -37,9 +37,14 @@ assert.doesNotMatch(document.querySelector('#db-rds-content').textContent, /unde
 assert.doesNotMatch(document.querySelector('#db-aurora-content').textContent, /undefined|null|NaN/);
 const dynamo = document.getElementById('databases-view').querySelector('#db-dynamodb-content');
 const buttons = [...dynamo.querySelectorAll('tbody tr')].map(row => [...row.querySelectorAll('button')]);
-assert.match(buttons[0][0].getAttribute('onclick'), /dynamodb:us-east-1:same-name/);
-assert.match(buttons[1][0].getAttribute('onclick'), /dynamodb:us-west-2:same-name/);
-assert.match(buttons[2][0].getAttribute('onclick'), /arn:aws:dynamodb:eu-west-1:123:table\/named/);
+for (const [button, expectedScopeKey] of [
+  [buttons[0][0], 'dynamodb:us-east-1:same-name'],
+  [buttons[1][0], 'dynamodb:us-west-2:same-name'],
+  [buttons[2][0], 'arn:aws:dynamodb:eu-west-1:123:table/named']
+]) {
+  assert.equal(button.getAttribute('data-act'), 'openScopeModal');
+  assert.equal(JSON.parse(button.getAttribute('data-args'))[0], expectedScopeKey);
+}
 assert.equal(buttons[0][1].disabled, true);
 assert.match(buttons[0][1].title, /ARN is unavailable/);
 assert.equal(buttons[2][1].disabled, false);

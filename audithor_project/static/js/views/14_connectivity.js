@@ -6,6 +6,7 @@
 // --- IMPORTS ---
 // This module only needs the handleTabClick utility.
 import { handleTabClick } from '../utils.js';
+import { html, join, setHtml } from '../safe_html.js';
 
 // --- SERVICE DESCRIPTIONS ---
 const serviceDescriptions = {
@@ -49,7 +50,7 @@ export const buildConnectivityView = () => {
 
     const { peering_connections, tgw_attachments, vpn_connections, vpc_endpoints, nat_gateways = [] } = window.connectivityApiData.results;
 
-    container.innerHTML = `
+    setHtml(container, html`
         <header class="flex justify-between items-center mb-6">
             <div>
                 <h2 class="text-2xl font-bold text-[#204071]">Network Connectivity</h2>
@@ -93,7 +94,7 @@ export const buildConnectivityView = () => {
                 ${renderNatGatewaysTable(nat_gateways)}
             </div>
         </div>
-    `;
+    `);
     
     const tabsNav = container.querySelector('#connectivity-tabs');
     if (tabsNav) tabsNav.addEventListener('click', handleTabClick(tabsNav, '.connectivity-tab-content'));
@@ -101,7 +102,7 @@ export const buildConnectivityView = () => {
 
 // --- SERVICE DESCRIPTION RENDERER ---
 const renderServiceDescription = (serviceInfo) => {
-    return `
+    return html`
         <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
             <h3 class="text-lg font-semibold text-gray-800 mb-3">${serviceInfo.title}</h3>
             <div class="space-y-3">
@@ -126,7 +127,7 @@ const renderServiceDescription = (serviceInfo) => {
 
 const renderPeeringTable = (connections) => {
     if (!connections || connections.length === 0) {
-        return `
+        return html`
             <div class="bg-white p-6 rounded-xl border border-gray-100">
                 <div class="text-center">
                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -135,33 +136,26 @@ const renderPeeringTable = (connections) => {
                     <h3 class="mt-2 text-sm font-medium text-gray-900">No VPC Peering connections found</h3>
                     <p class="mt-1 text-sm text-gray-500">This account does not have active VPC Peering connections, which may indicate a simplified network architecture.</p>
                 </div>
-            </div>
-        `;
+            </div>`;
     }
-    
-    let table = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Connection ID</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Requester VPC</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Accepter VPC</th>' +
-                '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-    connections.forEach(c => {
-        const requesterInfo = `${c.RequesterVpc.VpcId} (${c.RequesterVpc.OwnerId})`;
-        const accepterInfo = `${c.AccepterVpc.VpcId} (${c.AccepterVpc.OwnerId})`;
-        table += `<tr class="hover:bg-gray-50">
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${c.Region}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800 font-mono">${c.ConnectionId}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${requesterInfo}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${accepterInfo}</td>
-                </tr>`;
-    });
-    table += '</tbody></table></div>';
-    return table;
+
+    const rows = connections.map(connection => html`<tr class="hover:bg-gray-50">
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${connection.Region}</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800 font-mono">${connection.ConnectionId}</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${connection.RequesterVpc.VpcId} (${connection.RequesterVpc.OwnerId})</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${connection.AccepterVpc.VpcId} (${connection.AccepterVpc.OwnerId})</td>
+    </tr>`);
+
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50"><tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Connection ID</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Requester VPC</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Accepter VPC</th>
+        </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody>
+    </table></div>`;
 };
 
 const renderTgwAttachmentsTable = (attachments) => {
     if (!attachments || attachments.length === 0) {
-        return `
+        return html`
             <div class="bg-white p-6 rounded-xl border border-gray-100">
                 <div class="text-center">
                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -170,31 +164,26 @@ const renderTgwAttachmentsTable = (attachments) => {
                     <h3 class="mt-2 text-sm font-medium text-gray-900">No Transit Gateway attachments found</h3>
                     <p class="mt-1 text-sm text-gray-500">This account does not use Transit Gateway for centralized network connectivity.</p>
                 </div>
-            </div>
-        `;
+            </div>`;
     }
-    
-     let table = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Transit Gateway ID</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Attached VPC</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Attachment ID</th>' +
-                '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-    attachments.forEach(a => {
-        table += `<tr class="hover:bg-gray-50">
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${a.Region}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800 font-mono">${a.TransitGatewayId}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${a.VpcId}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${a.AttachmentId}</td>
-                </tr>`;
-    });
-    table += '</tbody></table></div>';
-    return table;
+
+    const rows = attachments.map(attachment => html`<tr class="hover:bg-gray-50">
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${attachment.Region}</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800 font-mono">${attachment.TransitGatewayId}</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${attachment.VpcId}</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${attachment.AttachmentId}</td>
+    </tr>`);
+
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50"><tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Transit Gateway ID</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Attached VPC</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Attachment ID</th>
+        </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody>
+    </table></div>`;
 };
 
 const renderVpnConnectionsTable = (connections) => {
     if (!connections || connections.length === 0) {
-        return `
+        return html`
             <div class="bg-white p-6 rounded-xl border border-gray-100">
                 <div class="text-center">
                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -203,31 +192,26 @@ const renderVpnConnectionsTable = (connections) => {
                     <h3 class="mt-2 text-sm font-medium text-gray-900">No VPN connections found</h3>
                     <p class="mt-1 text-sm text-gray-500">This account does not have active site-to-site VPN connections to on-premises networks.</p>
                 </div>
-            </div>
-        `;
+            </div>`;
     }
-    
-    let table = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPN Connection ID</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer Gateway ID</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Associated TGW</th>' +
-                '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-    connections.forEach(c => {
-        table += `<tr class="hover:bg-gray-50">
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${c.Region}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800 font-mono">${c.VpnConnectionId}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${c.CustomerGatewayId}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${c.TransitGatewayId}</td>
-                </tr>`;
-    });
-    table += '</tbody></table></div>';
-    return table;
+
+    const rows = connections.map(connection => html`<tr class="hover:bg-gray-50">
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${connection.Region}</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800 font-mono">${connection.VpnConnectionId}</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${connection.CustomerGatewayId}</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${connection.TransitGatewayId}</td>
+    </tr>`);
+
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50"><tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPN Connection ID</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer Gateway ID</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Associated TGW</th>
+        </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody>
+    </table></div>`;
 };
 
 const renderVpcEndpointsTable = (endpoints) => {
     if (!endpoints || endpoints.length === 0) {
-        return `
+        return html`
             <div class="bg-white p-6 rounded-xl border border-gray-100">
                 <div class="text-center">
                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -236,31 +220,26 @@ const renderVpcEndpointsTable = (endpoints) => {
                     <h3 class="mt-2 text-sm font-medium text-gray-900">No VPC Endpoints found</h3>
                     <p class="mt-1 text-sm text-gray-500">This account does not use VPC Endpoints for private connectivity to AWS services.</p>
                 </div>
-            </div>
-        `;
+            </div>`;
     }
-    
-    let table = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPC ID</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Service Name</th>' +
-                '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-    endpoints.forEach(e => {
-        table += `<tr class="hover:bg-gray-50">
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${e.Region}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800 font-mono">${e.VpcId}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${e.EndpointType}</td>
-                    <td class="px-4 py-4 text-sm text-gray-600 break-all font-mono">${e.ServiceName}</td>
-                </tr>`;
-    });
-    table += '</tbody></table></div>';
-    return table;
+
+    const rows = endpoints.map(endpoint => html`<tr class="hover:bg-gray-50">
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${endpoint.Region}</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800 font-mono">${endpoint.VpcId}</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${endpoint.EndpointType}</td>
+        <td class="px-4 py-4 text-sm text-gray-600 break-all font-mono">${endpoint.ServiceName}</td>
+    </tr>`);
+
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50"><tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPC ID</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Service Name</th>
+        </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody>
+    </table></div>`;
 };
 
 const renderNatGatewaysTable = (natGateways) => {
     if (!natGateways || natGateways.length === 0) {
-        return `
+        return html`
             <div class="bg-white p-6 rounded-xl border border-gray-100">
                 <div class="text-center">
                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -269,22 +248,10 @@ const renderNatGatewaysTable = (natGateways) => {
                     <h3 class="mt-2 text-sm font-medium text-gray-900">No NAT Gateways found</h3>
                     <p class="mt-1 text-sm text-gray-500">This account does not have any NAT Gateways configured for outbound internet connectivity.</p>
                 </div>
-            </div>
-        `;
+            </div>`;
     }
-    
-    let table = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">NAT Gateway ID</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPC</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subnet</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">State</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Public IP</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Private IP</th>' +
-                '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-    
-    natGateways.forEach(nat => {
+
+    const rows = natGateways.map(nat => {
         let stateClass = 'bg-gray-100 text-gray-800';
         if (nat.State === 'available') {
             stateClass = 'bg-green-100 text-green-800';
@@ -297,22 +264,21 @@ const renderNatGatewaysTable = (natGateways) => {
         const publicIp = nat.NatGatewayAddresses?.find(addr => addr.PublicIp)?.PublicIp || '-';
         const privateIp = nat.NatGatewayAddresses?.find(addr => addr.PrivateIp)?.PrivateIp || '-';
 
-        table += `<tr class="hover:bg-gray-50">
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${nat.Region}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800 font-mono">${nat.NatGatewayId}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${nat.VpcId}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${nat.SubnetId}</td>
-                    <td class="px-4 py-4 whitespace-nowrap">
-                        <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full ${stateClass}">
-                            ${nat.State}
-                        </span>
-                    </td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 capitalize">${nat.ConnectivityType || 'public'}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${publicIp}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${privateIp}</td>
-                </tr>`;
+        return html`<tr class="hover:bg-gray-50">
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${nat.Region}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800 font-mono">${nat.NatGatewayId}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${nat.VpcId}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${nat.SubnetId}</td>
+            <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex px-2 py-1 text-xs font-medium rounded-full ${stateClass}">${nat.State}</span></td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 capitalize">${nat.ConnectivityType || 'public'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${publicIp}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${privateIp}</td>
+        </tr>`;
     });
-    
-    table += '</tbody></table></div>';
-    return table;
+
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50"><tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">NAT Gateway ID</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPC</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subnet</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">State</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Public IP</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Private IP</th>
+        </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody>
+    </table></div>`;
 };
