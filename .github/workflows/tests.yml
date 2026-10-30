@@ -19,6 +19,6 @@ jobs:
       - run: npm test
       - name: Check JavaScript syntax
         run: |
-          for file in audithor_project/static/js/collection.js audithor_project/static/js/app.js audithor_project/static/js/views/{08_inspector,09_acm,11_databases}.js; do
-            node --input-type=module --check < "$file"
+          find audithor_project/static/js -name '*.js' -print | while IFS= read -r file; do
+            node --input-type=module --check < "$file" || exit 1
           done

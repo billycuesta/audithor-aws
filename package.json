@@ -2,6 +2,6 @@
   "name": "audithor-aws-tests",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node tests/collection.test.mjs && node tests/inspector_coverage.test.mjs && node tests/views.test.mjs && node tests/views_degraded.test.mjs" },
+  "scripts": { "test": "node tests/run_all.mjs" },
   "devDependencies": { "jsdom": "30.1.3" }
 }
