@@ -6,6 +6,7 @@
 // --- IMPORTACIONES ---
 // Importamos las funciones de utilidad que vamos a necesitar desde el fichero utils.js
 import { handleTabClick, renderSecurityHubFindings, log } from '../utils.js';
+import { act, html, join, raw, setHtml } from '../safe_html.js';
 
 
 // --- FUNCIÓN PRINCIPAL DE LA VISTA (EXPORTADA) ---
@@ -18,7 +19,7 @@ export const buildIamView = () => {
 
     const accessAnalyzerFindingsCount = window.accessAnalyzerApiData?.results?.findings?.length || 0;
 
-    container.innerHTML = `
+    setHtml(container, html`
         <header class="flex justify-between items-center mb-6">
             <div><h2 class="text-2xl font-bold text-[#204071]">Identity & Access</h2><p class="text-sm text-gray-500 scan-info"></p></div>
         </header>
@@ -44,43 +45,43 @@ export const buildIamView = () => {
         </div>
         <div id="iam-tab-content-container">
             <div id="resumen-content" class="iam-tab-content">
-                ${renderServiceDescription(serviceDescriptions.summary)}
-                ${createIamResumenHtml()}
+                ${raw(renderServiceDescription(serviceDescriptions.summary))}
+                ${raw(createIamResumenHtml())}
             </div>
             <div id="usuarios-content" class="iam-tab-content hidden">
-                ${renderServiceDescription(serviceDescriptions.users)}
-                ${createIamUsuariosHtml()}
+                ${raw(renderServiceDescription(serviceDescriptions.users))}
+                ${raw(createIamUsuariosHtml())}
             </div>
             <div id="grupos-content" class="iam-tab-content hidden">
-                ${renderServiceDescription(serviceDescriptions.groups)}
-                ${createIamGruposHtml()}
+                ${raw(renderServiceDescription(serviceDescriptions.groups))}
+                ${raw(createIamGruposHtml())}
             </div>
             <div id="roles-content" class="iam-tab-content hidden">
-                ${renderServiceDescription(serviceDescriptions.roles)}
-                ${createIamRolesHtml()}
+                ${raw(renderServiceDescription(serviceDescriptions.roles))}
+                ${raw(createIamRolesHtml())}
             </div>
             <div id="politicas-content" class="iam-tab-content hidden">
-                ${renderServiceDescription(serviceDescriptions.policies)}
-                ${createIamPoliticasHtml()}
+                ${raw(renderServiceDescription(serviceDescriptions.policies))}
+                ${raw(createIamPoliticasHtml())}
             </div>
             <div id="access-analyzer-content" class="iam-tab-content hidden">
-                ${renderServiceDescription(serviceDescriptions.accessAnalyzer)}
+                ${raw(renderServiceDescription(serviceDescriptions.accessAnalyzer))}
             </div>
             <div id="securityhub-content" class="iam-tab-content hidden">
-                ${renderServiceDescription(serviceDescriptions.securityHub)}
-                ${createSecurityHubHtml()}
+                ${raw(renderServiceDescription(serviceDescriptions.securityHub))}
+                ${raw(createSecurityHubHtml())}
             </div>
             <div id="detalle-permisos-content" class="iam-tab-content hidden">
-                ${renderServiceDescription(serviceDescriptions.permissionDetails)}
-                ${renderIamDetailsViewHtml()}
+                ${raw(renderServiceDescription(serviceDescriptions.permissionDetails))}
+                ${raw(renderIamDetailsViewHtml())}
             </div>
             <div id="critical-perms-content" class="iam-tab-content hidden">
-                ${renderServiceDescription(serviceDescriptions.criticalPermissions)}
+                ${raw(renderServiceDescription(serviceDescriptions.criticalPermissions))}
             </div>
             <div id="federation-content" class="iam-tab-content hidden">
-                ${renderServiceDescription(serviceDescriptions.federation)}
+                ${raw(renderServiceDescription(serviceDescriptions.federation))}
             </div>
-        </div>`;
+        </div>`);
 
     const tabsNav = container.querySelector('#iam-tabs');
     if (tabsNav) tabsNav.addEventListener('click', handleTabClick(tabsNav, '.iam-tab-content'));
@@ -166,7 +167,7 @@ const setSearchType = (type) => {
     // Clear previous results
     const resultsContainer = document.getElementById('iam-search-results-container');
     if (resultsContainer) {
-        resultsContainer.innerHTML = '';
+        setHtml(resultsContainer, html``);
     }
     
     // Clear input
@@ -180,108 +181,66 @@ const setSearchType = (type) => {
 
 const renderAccessAnalyzerStatusTable = (summary) => {
     if (!summary || summary.length === 0) {
-        return '<div class="bg-white p-6 rounded-xl border border-gray-100 mb-6"><p class="text-center text-gray-500">No active Access Analyzers found in any region.</p></div>';
+        return html`<div class="bg-white p-6 rounded-xl border border-gray-100 mb-6"><p class="text-center text-gray-500">No active Access Analyzers found in any region.</p></div>`;
     }
-
-    let tableHtml = `<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto mb-6">
+    const rows = [...summary].sort((a, b) => a.Region.localeCompare(b.Region)).map(analyzer => html`
+        <tr class="hover:bg-gray-50">
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${analyzer.Region}</td>
+            <td class="px-4 py-4 text-sm text-gray-800 font-mono break-all">${analyzer.Name}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${analyzer.Type}</td>
+        </tr>`);
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto mb-6">
         <h3 class="font-bold text-lg mb-4 text-[#204071]">Enabled Analyzers Summary</h3>
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Analyzer Name</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">`;
-
-    summary.sort((a, b) => a.Region.localeCompare(b.Region)).forEach(analyzer => {
-        tableHtml += `
-            <tr class="hover:bg-gray-50">
-                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${analyzer.Region}</td>
-                <td class="px-4 py-4 text-sm text-gray-800 font-mono break-all">${analyzer.Name}</td>
-                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${analyzer.Type}</td>
-            </tr>`;
-    });
-
-    tableHtml += `</tbody></table></div>`;
-    return tableHtml;
+        <table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Analyzer Name</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+        </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`;
 };
 
 const renderAccessAnalyzerContent = () => {
     const container = document.getElementById('access-analyzer-content');
     if (!container || !window.accessAnalyzerApiData) return;
-
     const { findings, summary } = window.accessAnalyzerApiData.results;
-
-    let contentHtml = renderAccessAnalyzerStatusTable(summary);
-
+    const status = renderAccessAnalyzerStatusTable(summary);
     if (!findings || findings.length === 0) {
-        contentHtml += `<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">Good job! No external access findings were found.</p></div>`;
-        container.innerHTML = contentHtml;
+        setHtml(container, html`${status}<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">Good job! No external access findings were found.</p></div>`);
         return;
     }
-
-    contentHtml += `<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-        <h3 class="font-bold text-lg mb-4 text-[#204071]">External Access Findings</h3>
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/12">Region</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-4/12">Affected Resource</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-4/12">External Principal</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/12">Public</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-2/12">Allowed Actions</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">`;
-
     const scannedAccountId = window.iamApiData?.metadata?.accountId;
     const rolesFromScan = window.iamApiData?.results?.roles;
-
-    findings.forEach(f => {
-        const publicBadge = f.IsPublic 
-            ? `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">YES</span>`
-            : `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">No</span>`;
-        
-        const principalDisplay = f.Principal === 'Public' 
-            ? `<span class="font-bold text-red-600">* (Anyone)</span>` 
-            : f.Principal;
-
+    const rows = findings.map(f => {
+        const publicBadge = f.IsPublic
+            ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">YES</span>`
+            : html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">No</span>`;
+        const principal = f.Principal === 'Public' ? html`<span class="font-bold text-red-600">* (Anyone)</span>` : f.Principal;
         let vipBadge = '';
         if (f.ResourceType === 'AWS::IAM::Role' && scannedAccountId && rolesFromScan) {
             try {
-                const resourceArn = f.Resource;
-                const resourceAccountId = resourceArn.split(':')[4];
-                if (resourceAccountId === scannedAccountId) {
-                    const roleNameParts = resourceArn.split('/');
-                    const roleName = roleNameParts[roleNameParts.length - 1];
-                    const roleDetails = rolesFromScan.find(r => r.RoleName === roleName);
-                    if (roleDetails && roleDetails.IsPrivileged) {
-                        vipBadge = '<span class="bg-yellow-200 text-yellow-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">VIP</span>';
-                    }
+                const accountId = f.Resource.split(':')[4];
+                const roleName = f.Resource.split('/').at(-1);
+                if (accountId === scannedAccountId && rolesFromScan.find(role => role.RoleName === roleName)?.IsPrivileged) {
+                    vipBadge = html`<span class="bg-yellow-200 text-yellow-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">VIP</span>`;
                 }
             } catch (e) { /* silent fail */ }
         }
-
-        contentHtml += `
-            <tr class="hover:bg-gray-50">
-                <td class="px-4 py-4 align-top whitespace-nowrap text-xs text-gray-600">${f.Region}</td>
-                <td class="px-4 py-4 align-top text-xs text-gray-800 font-mono break-all whitespace-normal">
-                    <div>
-                        ${vipBadge}
-                        <span class="font-semibold">${f.ResourceType}</span>
-                    </div>
-                    ${f.Resource}
-                </td>
-                <td class="px-4 py-4 align-top whitespace-normal text-xs text-gray-600 font-mono break-all">${principalDisplay}</td>
-                <td class="px-4 py-4 align-top whitespace-nowrap text-xs">${publicBadge}</td>
-                <td class="px-4 py-4 align-top whitespace-normal text-xs text-gray-600 break-all">${f.Action}</td>
-            </tr>`;
+        return html`<tr class="hover:bg-gray-50">
+            <td class="px-4 py-4 align-top whitespace-nowrap text-xs text-gray-600">${f.Region}</td>
+            <td class="px-4 py-4 align-top text-xs text-gray-800 font-mono break-all whitespace-normal"><div>${vipBadge}<span class="font-semibold">${f.ResourceType}</span></div>${f.Resource}</td>
+            <td class="px-4 py-4 align-top whitespace-normal text-xs text-gray-600 font-mono break-all">${principal}</td>
+            <td class="px-4 py-4 align-top whitespace-nowrap text-xs">${publicBadge}</td>
+            <td class="px-4 py-4 align-top whitespace-normal text-xs text-gray-600 break-all">${f.Action}</td>
+        </tr>`;
     });
-
-    contentHtml += `</tbody></table></div>`;
-    container.innerHTML = contentHtml;
+    setHtml(container, html`${status}<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+        <h3 class="font-bold text-lg mb-4 text-[#204071]">External Access Findings</h3>
+        <table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/12">Region</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-4/12">Affected Resource</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-4/12">External Principal</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/12">Public</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-2/12">Allowed Actions</th>
+        </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`);
 };
 
 const createIamResumenHtml = () => `
@@ -334,40 +293,8 @@ export const openModalWithUserRoles = async (username, userIndex) => {
     modalTitle.textContent = `Roles for User: ${username}`;
     
     // Mostrar loading state
-    modalContent.innerHTML = `
-        <div class="space-y-4">
-            <!-- Roles por tags (inmediato) -->
-            ${tagBasedRoles.length > 0 ? `
-            <div>
-                <h4 class="font-semibold text-md mb-3 text-[#204071] border-b border-gray-200 pb-2">
-                    Organizational Roles (from tags)
-                </h4>
-                <div class="space-y-2">
-                    ${tagBasedRoles.map(role => `
-                        <div class="p-3 bg-blue-50 border border-blue-200 rounded-md">
-                            <div class="flex items-center justify-between">
-                                <span class="font-medium text-gray-800">${role.RoleName || role}</span>
-                                <span class="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">
-                                    Tag-based
-                                </span>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-            ` : ''}
-            
-            <!-- Roles asumibles (loading) -->
-            <div>
-                <h4 class="font-semibold text-md mb-3 text-[#204071] border-b border-gray-200 pb-2">
-                    Assumable IAM Roles
-                </h4>
-                <div class="flex items-center justify-center py-8">
-                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#204071]"></div>
-                    <span class="ml-3 text-gray-600">Loading assumable roles...</span>
-                </div>
-            </div>
-        </div>`;
+    const tagRolesMarkup = tagBasedRoles.length ? html`<div><h4 class="font-semibold text-md mb-3 text-[#204071] border-b border-gray-200 pb-2">Organizational Roles (from tags)</h4><div class="space-y-2">${join(tagBasedRoles.map(role => html`<div class="p-3 bg-blue-50 border border-blue-200 rounded-md"><div class="flex items-center justify-between"><span class="font-medium text-gray-800">${role.RoleName || role}</span><span class="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">Tag-based</span></div></div>`))}</div></div>` : '';
+    setHtml(modalContent, html`<div class="space-y-4">${tagRolesMarkup}<div><h4 class="font-semibold text-md mb-3 text-[#204071] border-b border-gray-200 pb-2">Assumable IAM Roles</h4><div class="flex items-center justify-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#204071]"></div><span class="ml-3 text-gray-600">Loading assumable roles...</span></div></div></div>`);
     
     modal.classList.remove('hidden');
 
@@ -396,64 +323,11 @@ export const openModalWithUserRoles = async (username, userIndex) => {
         }
 
         // Actualizar contenido del modal con los resultados
-        let rolesHtml = '<div class="space-y-4">';
-        
-        // Mostrar roles por tags si existen
-        if (tagBasedRoles.length > 0) {
-            rolesHtml += `
-                <div>
-                    <h4 class="font-semibold text-md mb-3 text-[#204071] border-b border-gray-200 pb-2">
-                        Organizational Roles (from tags)
-                    </h4>
-                    <div class="space-y-2">`;
-            
-            tagBasedRoles.forEach(role => {
-                rolesHtml += `
-                    <div class="p-3 bg-blue-50 border border-blue-200 rounded-md">
-                        <div class="flex items-center justify-between">
-                            <span class="font-medium text-gray-800">${role.RoleName || role}</span>
-                            <span class="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">
-                                Tag-based
-                            </span>
-                        </div>
-                    </div>`;
-            });
-            
-            rolesHtml += '</div></div>';
-        }
-        
-        // Mostrar roles asumibles
         const assumableRoles = result.assumable_roles || [];
-        rolesHtml += `
-            <div>
-                <h4 class="font-semibold text-md mb-3 text-[#204071] border-b border-gray-200 pb-2">
-                    Assumable IAM Roles
-                </h4>`;
-        
-        if (assumableRoles.length > 0) {
-            rolesHtml += '<div class="space-y-2">';
-            
-            assumableRoles.forEach(role => {
-                rolesHtml += `
-                    <div class="p-3 bg-green-50 border border-green-200 rounded-md">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="font-medium text-gray-800">${role.RoleName}</span>
-                            <span class="px-2 py-1 text-xs font-semibold bg-green-100 text-green-800 rounded-full">
-                                Policy-based
-                            </span>
-                        </div>
-                        <p class="text-xs text-gray-600 font-mono break-all">${role.RoleArn}</p>
-                    </div>`;
-            });
-            
-            rolesHtml += '</div>';
-        } else {
-            rolesHtml += '<p class="text-center text-gray-500 py-4">No assumable roles found for this user.</p>';
-        }
-        
-        rolesHtml += '</div></div>';
-        
-        modalContent.innerHTML = rolesHtml;
+        const assumableMarkup = assumableRoles.length
+            ? html`<div class="space-y-2">${join(assumableRoles.map(role => html`<div class="p-3 bg-green-50 border border-green-200 rounded-md"><div class="flex items-center justify-between mb-2"><span class="font-medium text-gray-800">${role.RoleName}</span><span class="px-2 py-1 text-xs font-semibold bg-green-100 text-green-800 rounded-full">Policy-based</span></div><p class="text-xs text-gray-600 font-mono break-all">${role.RoleArn}</p></div>`))}</div>`
+            : html`<p class="text-center text-gray-500 py-4">No assumable roles found for this user.</p>`;
+        setHtml(modalContent, html`<div class="space-y-4">${tagRolesMarkup}<div><h4 class="font-semibold text-md mb-3 text-[#204071] border-b border-gray-200 pb-2">Assumable IAM Roles</h4>${assumableMarkup}</div></div>`);
         
         const totalRoles = tagBasedRoles.length + assumableRoles.length;
         log(`Successfully loaded ${totalRoles} roles for user ${username} (${tagBasedRoles.length} tag-based, ${assumableRoles.length} assumable)`, 'success');
@@ -462,46 +336,7 @@ export const openModalWithUserRoles = async (username, userIndex) => {
         log(`Error fetching assumable roles: ${error.message}`, 'error');
         
         // Mostrar error en el modal pero mantener roles por tags
-        let errorContent = '<div class="space-y-4">';
-        
-        // Mantener roles por tags visibles
-        if (tagBasedRoles.length > 0) {
-            errorContent += `
-                <div>
-                    <h4 class="font-semibold text-md mb-3 text-[#204071] border-b border-gray-200 pb-2">
-                        Organizational Roles (from tags)
-                    </h4>
-                    <div class="space-y-2">`;
-            
-            tagBasedRoles.forEach(role => {
-                errorContent += `
-                    <div class="p-3 bg-blue-50 border border-blue-200 rounded-md">
-                        <div class="flex items-center justify-between">
-                            <span class="font-medium text-gray-800">${role.RoleName || role}</span>
-                            <span class="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">
-                                Tag-based
-                            </span>
-                        </div>
-                    </div>`;
-            });
-            
-            errorContent += '</div></div>';
-        }
-        
-        // Mostrar error para roles asumibles
-        errorContent += `
-            <div>
-                <h4 class="font-semibold text-md mb-3 text-[#204071] border-b border-gray-200 pb-2">
-                    Assumable IAM Roles
-                </h4>
-                <div class="bg-red-50 text-red-700 p-3 rounded-lg">
-                    <h5 class="font-bold">Error loading assumable roles</h5>
-                    <p class="text-sm">${error.message}</p>
-                </div>
-            </div>
-        </div>`;
-        
-        modalContent.innerHTML = errorContent;
+        setHtml(modalContent, html`<div class="space-y-4">${tagRolesMarkup}<div><h4 class="font-semibold text-md mb-3 text-[#204071] border-b border-gray-200 pb-2">Assumable IAM Roles</h4><div class="bg-red-50 text-red-700 p-3 rounded-lg"><h5 class="font-bold">Error loading assumable roles</h5><p class="text-sm">${error.message}</p></div></div></div>`);
     }
 };
 
@@ -599,117 +434,62 @@ const renderCriticalPermissionsTable = (users) => {
     const hasAnyPrivilegedUser = Object.values(permissionsByCategory).some(userList => userList.length > 0);
 
     if (!hasAnyPrivilegedUser) {
-        container.innerHTML = `<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><p class="text-center text-gray-500">Good job! No users with critical permissions were found in the analyzed categories.</p></div>`;
+        setHtml(container, html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><p class="text-center text-gray-500">Good job! No users with critical permissions were found in the analyzed categories.</p></div>`);
         return;
     }
 
-    let tableHtml = `<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <h3 class="font-bold text-lg mb-4 text-[#204071]">Critical Permissions by Service</h3>
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Critical Service</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Users and Assigned Permissions</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">`;
-
-    for (const category in permissionsByCategory) {
-        const userList = permissionsByCategory[category];
-        if (userList.length > 0) {
-            tableHtml += `<tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 align-top">
-                                <span class="inline-block ${categoryStyles[category]} text-sm font-semibold mr-2 px-4 py-1.5 rounded-full">${categoryNames[category]}</span>
-                            </td>
-                            <td class="px-6 py-4 text-sm align-top">
-                                <div class="space-y-4">`;
-            
-            userList.forEach(user => {
-                const permissionsBadges = user.permissions.map(perm => 
-                    `<span class="inline-block bg-gray-100 text-gray-800 text-xs font-mono font-medium mr-2 mb-2 px-2.5 py-0.5 rounded-full">${perm}</span>`
-                ).join('');
-
-                tableHtml += `<div class="border-b border-gray-100 pb-3 last:border-b-0">
-                                <p class="font-semibold text-gray-800">${user.userName}</p>
-                                <div class="mt-1">${permissionsBadges}</div>
-                            </div>`;
-            });
-
-            tableHtml += `</div></td></tr>`;
-        }
-    }
-
-    tableHtml += `</tbody></table></div></div>`;
-    container.innerHTML = tableHtml;
+    const rows = Object.keys(permissionsByCategory).flatMap(category => {
+        const usersInCategory = permissionsByCategory[category];
+        if (!usersInCategory.length) return [];
+        const users = usersInCategory.map(user => html`<div class="border-b border-gray-100 pb-3 last:border-b-0">
+            <p class="font-semibold text-gray-800">${user.userName}</p>
+            <div class="mt-1">${join(user.permissions.map(permission => html`<span class="inline-block bg-gray-100 text-gray-800 text-xs font-mono font-medium mr-2 mb-2 px-2.5 py-0.5 rounded-full">${permission}</span>`))}</div>
+        </div>`);
+        return [html`<tr class="hover:bg-gray-50">
+            <td class="px-6 py-4 align-top"><span class="inline-block ${categoryStyles[category]} text-sm font-semibold mr-2 px-4 py-1.5 rounded-full">${categoryNames[category]}</span></td>
+            <td class="px-6 py-4 text-sm align-top"><div class="space-y-4">${join(users)}</div></td>
+        </tr>`];
+    });
+    setHtml(container, html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h3 class="font-bold text-lg mb-4 text-[#204071]">Critical Permissions by Service</h3>
+        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Critical Service</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Users and Assigned Permissions</th>
+        </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div></div>`);
 };
 
 const renderFederationView = () => {
     const container = document.getElementById('federation-content');
-    if (!container || !window.federationApiData || !window.federationApiData.results) {
-        if(container) container.innerHTML = '<p class="text-center text-gray-500 py-4">Federation data is not available. Run a scan or check for API errors.</p>';
+    if (!container) return;
+    if (!window.federationApiData?.results) {
+        setHtml(container, html`<p class="text-center text-gray-500 py-4">Federation data is not available. Run a scan or check for API errors.</p>`);
         return;
     }
-
     const { iam_federation = {}, identity_center = {} } = window.federationApiData.results;
-
-    let aliasHtml = `<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
-                        <h3 class="font-bold text-lg mb-2 text-[#204071]">Account Alias</h3>`;
-    if (iam_federation.account_alias) {
-        const signInUrl = `https://${iam_federation.account_alias}.signin.aws.amazon.com/console`;
-        aliasHtml += `<p class="text-sm text-gray-600">Alias: <strong class="font-mono bg-gray-100 p-1 rounded">${iam_federation.account_alias}</strong></p>
-                    <p class="text-sm text-gray-600 mt-2">Sign-in URL:</p>
-                    <a href="${signInUrl}" target="_blank" class="text-blue-600 hover:underline font-mono text-sm break-all">${signInUrl}</a>`;
-    } else {
-        aliasHtml += `<p class="text-sm text-gray-600">This account does not have a custom alias configured.</p>`;
-    }
-    aliasHtml += `</div>`;
-    
-    let identityCenterHtml = `<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mt-6">
-                                <h3 class="font-bold text-lg mb-4 text-[#204071]">AWS Identity Center (SSO)</h3>`;
-
+    const alias = iam_federation.account_alias;
+    const safeAlias = typeof alias === 'string' && /^[a-z0-9-]+$/i.test(alias);
+    const aliasContent = alias ? html`<p class="text-sm text-gray-600">Alias: <strong class="font-mono bg-gray-100 p-1 rounded">${alias}</strong></p>
+        <p class="text-sm text-gray-600 mt-2">Sign-in URL:</p>
+        ${safeAlias ? html`<a href="https://${alias}.signin.aws.amazon.com/console" target="_blank" class="text-blue-600 hover:underline font-mono text-sm break-all">https://${alias}.signin.aws.amazon.com/console</a>` : ''}`
+        : html`<p class="text-sm text-gray-600">This account does not have a custom alias configured.</p>`;
+    let identityContent = html``;
     if (identity_center.status === 'Found') {
         const { instance_arn, assignments } = identity_center;
-
-        identityCenterHtml += `<div class="mb-6 space-y-2 text-sm">
-                                    <p><strong class="text-gray-600">Instance ARN:</strong> <span class="font-mono bg-gray-100 p-1 rounded">${instance_arn}</span></p>
-                                </div>`;
-
-        if (assignments && assignments.length > 0) {
-            identityCenterHtml += `<h4 class="font-semibold text-md mb-2">Permission Assignments</h4>
-                                    <div class="overflow-x-auto">
-                                    <table id="sso-assignments-table" class="min-w-full divide-y divide-gray-200">
-                                        <thead class="bg-gray-50"><tr>
-                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Group</th>
-                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Permission Set (Role)</th>
-                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">AWS Account ID</th>
-                                            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Details</th>
-                                        </tr></thead>
-                                        <tbody class="bg-white divide-y divide-gray-200">`;
-            assignments.forEach(a => {
-                const vipBadge = a.IsPrivileged ? '<span class="bg-yellow-200 text-yellow-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">VIP</span>' : '';
-                
-                identityCenterHtml += `<tr class="hover:bg-gray-50">
-                                        <td class="px-4 py-3 text-sm font-medium text-gray-800">${a.GroupName}</td>
-                                        <td class="px-4 py-3 text-sm text-gray-600">${vipBadge}${a.PermissionSetName}</td>
-                                        <td class="px-4 py-3 text-sm text-gray-600 font-mono">${a.AccountId}</td>
-                                        <td class="px-4 py-3 text-center">
-                                            <button onclick="openModalWithSsoDetails('${a.GroupId}', '${a.GroupName}')" class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition">View</button>
-                                        </td>
-                                    </tr>`;
-            });
-            identityCenterHtml += `</tbody></table></div>`;
-        } else {
-            identityCenterHtml += `<p class="text-center text-gray-500 py-4">Identity Center is enabled, but no group permission assignments were found.</p>`;
-        }
+        const assignmentRows = (assignments || []).map(a => html`<tr class="hover:bg-gray-50">
+            <td class="px-4 py-3 text-sm font-medium text-gray-800">${a.GroupName}</td>
+            <td class="px-4 py-3 text-sm text-gray-600">${a.IsPrivileged ? html`<span class="bg-yellow-200 text-yellow-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">VIP</span>` : ''}${a.PermissionSetName}</td>
+            <td class="px-4 py-3 text-sm text-gray-600 font-mono">${a.AccountId}</td>
+            <td class="px-4 py-3 text-center"><button ${act('openModalWithSsoDetails', a.GroupId, a.GroupName)} class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition">View</button></td>
+        </tr>`);
+        const assignmentsMarkup = assignments?.length ? html`<h4 class="font-semibold text-md mb-2">Permission Assignments</h4><div class="overflow-x-auto"><table id="sso-assignments-table" class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Group</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Permission Set (Role)</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">AWS Account ID</th><th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Details</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(assignmentRows)}</tbody></table></div>`
+            : html`<p class="text-center text-gray-500 py-4">Identity Center is enabled, but no group permission assignments were found.</p>`;
+        identityContent = html`<div class="mb-6 space-y-2 text-sm"><p><strong class="text-gray-600">Instance ARN:</strong> <span class="font-mono bg-gray-100 p-1 rounded">${instance_arn}</span></p></div>${assignmentsMarkup}`;
     } else {
         const message = identity_center.message || "Could not retrieve Identity Center information. Necessary permissions (sso-admin, identitystore) may be missing or the service is not configured.";
-        identityCenterHtml += `<p class="text-center text-gray-500 py-4">${message}</p>`;
+        identityContent = html`<p class="text-center text-gray-500 py-4">${message}</p>`;
     }
-    
-    identityCenterHtml += `</div>`;
-    
-    container.innerHTML = aliasHtml + identityCenterHtml;
+    setHtml(container, html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6"><h3 class="font-bold text-lg mb-2 text-[#204071]">Account Alias</h3>${aliasContent}</div>
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mt-6"><h3 class="font-bold text-lg mb-4 text-[#204071]">AWS Identity Center (SSO)</h3>${identityContent}</div>`);
 };
 
 export const openModalWithSsoDetails = async (groupId, groupName) => {
@@ -720,12 +500,12 @@ export const openModalWithSsoDetails = async (groupId, groupName) => {
     if (!modal || !modalTitle || !modalContent) return;
 
     modalTitle.textContent = `Members of Group: ${groupName}`;
-    modalContent.innerHTML = `
+    setHtml(modalContent, html`
         <div class="space-y-3 animate-pulse p-2">
             <div class="h-8 bg-slate-200 rounded-md w-full"></div>
             <div class="h-8 bg-slate-200 rounded-md w-5/6"></div>
             <div class="h-8 bg-slate-200 rounded-md w-2/3"></div>
-        </div>`;
+        </div>`);
     modal.classList.remove('hidden');
 
     log(`Fetching members for SSO Group ID: ${groupId}`, 'info');
@@ -747,21 +527,14 @@ export const openModalWithSsoDetails = async (groupId, groupName) => {
         if (!response.ok) throw new Error(data.error);
 
         const memberCount = data.members ? data.members.length : 0;
-        let membersListHtml = '';
-        if (memberCount > 0) {
-            membersListHtml = '<div class="space-y-2 text-left">';
-            data.members.forEach(member => {
-                membersListHtml += `<div class="bg-slate-100 text-slate-800 text-sm font-mono p-2 rounded-md">${member}</div>`;
-            });
-            membersListHtml += '</div>';
-        } else {
-            membersListHtml = '<p class="text-sm text-gray-500 text-center py-4">This group has no members.</p>';
-        }
-        modalContent.innerHTML = membersListHtml;
+        const membersMarkup = memberCount > 0
+            ? html`<div class="space-y-2 text-left">${join(data.members.map(member => html`<div class="bg-slate-100 text-slate-800 text-sm font-mono p-2 rounded-md">${member}</div>`))}</div>`
+            : html`<p class="text-sm text-gray-500 text-center py-4">This group has no members.</p>`;
+        setHtml(modalContent, membersMarkup);
         log(`Successfully fetched ${memberCount} members for group ${groupName}.`, 'success');
 
     } catch (e) {
-        modalContent.innerHTML = `<div class="bg-red-50 text-red-700 p-3 rounded-lg text-left"><h4 class="font-bold">Error</h4><p>${e.message}</p></div>`;
+        setHtml(modalContent, html`<div class="bg-red-50 text-red-700 p-3 rounded-lg text-left"><h4 class="font-bold">Error</h4><p>${e.message}</p></div>`);
         log(`Error fetching group members: ${e.message}`, 'error');
     }
 };
@@ -781,16 +554,14 @@ export const openModalWithAccessKeyDetails = (userIndex) => {
         const ageClass = ageDays > 90 ? 'text-red-600 font-bold' : 'text-gray-600';
         const statusClass = k.Status === 'Active' ? 'text-green-600' : 'text-gray-500';
         const lastUsed = k.LastUsedDate !== 'N/A' ? new Date(k.LastUsedDate).toLocaleDateString() : 'Never';
-
-        return `
-            <div class="p-3 bg-gray-100 rounded-md border border-gray-200 text-xs text-left">
-                <div class="font-mono font-semibold text-gray-800">${k.AccessKeyId}</div>
-                <div class="mt-1"><span class="font-semibold">Status:</span> <span class="${statusClass}">${k.Status}</span></div>
-                <div><span class="font-semibold">Age:</span> <span class="${ageClass}">${ageDays} days</span></div>
-                <div><span class="font-semibold">Last Used:</span> ${lastUsed}</div>
-            </div>`;
-    }).join('');
-    modalContent.innerHTML = `<div class="space-y-3">${keysDetailsHtml}</div>`;
+        return html`<div class="p-3 bg-gray-100 rounded-md border border-gray-200 text-xs text-left">
+            <div class="font-mono font-semibold text-gray-800">${k.AccessKeyId}</div>
+            <div class="mt-1"><span class="font-semibold">Status:</span> <span class="${statusClass}">${k.Status}</span></div>
+            <div><span class="font-semibold">Age:</span> <span class="${ageClass}">${ageDays} days</span></div>
+            <div><span class="font-semibold">Last Used:</span> ${lastUsed}</div>
+        </div>`;
+    });
+    setHtml(modalContent, html`<div class="space-y-3">${join(keysDetailsHtml)}</div>`);
     modal.classList.remove('hidden');
 };
 
@@ -802,12 +573,8 @@ export const openModalWithUserGroups = (userIndex) => {
     if (!modal || !user || !user.Groups || user.Groups.length === 0) return;
 
     modalTitle.textContent = `Groups for User: ${user.UserName}`;
-    const groupsListHtml = user.Groups.map(groupName => {
-        return `<div class="p-3 bg-gray-100 rounded-md border border-gray-200 text-sm text-left font-semibold text-gray-800">
-                    ${groupName}
-                </div>`;
-    }).join('');
-    modalContent.innerHTML = `<div class="space-y-3">${groupsListHtml}</div>`;
+    const groupsListHtml = user.Groups.map(groupName => html`<div class="p-3 bg-gray-100 rounded-md border border-gray-200 text-sm text-left font-semibold text-gray-800">${groupName}</div>`);
+    setHtml(modalContent, html`<div class="space-y-3">${join(groupsListHtml)}</div>`);
     modal.classList.remove('hidden');
 };
 
@@ -819,7 +586,7 @@ export const updateSecurityHubDashboard = () => {
         // Si no hay findings, mostrar mensaje vacío
         const container = document.getElementById('sh-iam-findings-container');
         if (container) {
-            container.innerHTML = '<p class="text-center text-gray-500 py-4">No Security Hub data available. Run an analysis first.</p>';
+            setHtml(container, html`<p class="text-center text-gray-500 py-4">No Security Hub data available. Run an analysis first.</p>`);
         }
         return;
     }
@@ -859,293 +626,137 @@ export const updateSecurityHubDashboard = () => {
 
 const renderUsersTable = (users) => {
     const tableBody = document.getElementById('users-table-body');
-    tableBody.innerHTML = '';
     if (!users || users.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="10" class="text-center text-gray-500 py-4">No users were found.</td></tr>`;
+        setHtml(tableBody, html`<tr><td colspan="10" class="text-center text-gray-500 py-4">No users were found.</td></tr>`);
         return;
     }
-    
-    users.forEach((user, index) => {
-        const vipBadge = user.IsPrivileged ? '<span class="bg-yellow-200 text-yellow-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">VIP</span>' : '';
+    const rows = users.map((user, index) => {
+        const vipBadge = user.IsPrivileged ? html`<span class="bg-yellow-200 text-yellow-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">VIP</span>` : '';
         const passwordEnabled = user.PasswordEnabled ? 'YES' : 'NO';
-        const mfaEnabled = user.MFADevices.length > 0 ? '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">YES</span>' : '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">NO</span>';
-        
-        // CLI MFA Compliance check
+        const mfaEnabled = user.MFADevices.length > 0
+            ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">YES</span>`
+            : html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">NO</span>`;
         let cliMfaCompliance = '-';
         if (user.mfa_compliance) {
-            const isCompliant = user.mfa_compliance.cli_compliant;
-            const riskLevel = user.mfa_compliance.risk_level;
-            
-            if (riskLevel === 'none') {
-                cliMfaCompliance = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">N/A</span>';
-            } else if (isCompliant) {
-                cliMfaCompliance = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">YES</span>';
-            } else {
-                cliMfaCompliance = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">NO</span>';
-            }
+            const { cli_compliant: isCompliant, risk_level: riskLevel } = user.mfa_compliance;
+            cliMfaCompliance = riskLevel === 'none'
+                ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">N/A</span>`
+                : isCompliant
+                    ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">YES</span>`
+                    : html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">NO</span>`;
         }
-        
-        // Groups column
-        let groupsHtml = '-';
-        if (user.Groups && user.Groups.length > 0) {
-            groupsHtml = `<button 
-                              onclick="openModalWithUserGroups(${index})" 
-                              class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition whitespace-nowrap">
-                              View (${user.Groups.length})
-                          </button>`;
-        }
-        
-        // COLUMNA ROLES: Mostrar botón siempre, carga bajo demanda
+        const groupsHtml = user.Groups?.length
+            ? html`<button ${act('openModalWithUserGroups', index)} class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition whitespace-nowrap">View (${user.Groups.length})</button>` : '-';
         const tagBasedRoles = user.Roles || [];
-        let rolesButtonText = 'View';
-        
-        if (tagBasedRoles.length > 0) {
-            rolesButtonText = `View (${tagBasedRoles.length} Tag)`;
-        }
-        
-        const rolesHtml = `<button 
-                             onclick="openModalWithUserRoles('${user.UserName}', ${index})" 
-                             class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition whitespace-nowrap">
-                             ${rolesButtonText}
-                         </button>`;
-
+        const rolesButtonText = tagBasedRoles.length ? `View (${tagBasedRoles.length} Tag)` : 'View';
+        const rolesHtml = html`<button ${act('openModalWithUserRoles', user.UserName, index)} class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition whitespace-nowrap">${rolesButtonText}</button>`;
         const attachedPolicies = user.AttachedPolicies.join(', ') || '-';
         const inlinePolicies = user.InlinePolicies.join(', ') || '-';
-        
-        let accessKeysHtml = '-';
-        if (user.AccessKeys && user.AccessKeys.length > 0) {
-            accessKeysHtml = `<button 
-                                onclick="openModalWithAccessKeyDetails(${index})" 
-                                class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition whitespace-nowrap">
-                                View (${user.AccessKeys.length})
-                              </button>`;
-        }
-        
-        const row = document.createElement('tr');
-        row.className = 'hover:bg-gray-50';
-        
-        row.innerHTML = `
-            <td class="px-6 py-4 whitespace-nowrap text-xs font-medium text-[#204071] flex items-center">${vipBadge}${user.UserName}</td> 
-            <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">${passwordEnabled}</td> 
-            <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">${user.PasswordLastUsed}</td> 
-            <td class="px-6 py-4 whitespace-nowrap text-xs">${mfaEnabled}</td> 
+        const accessKeysHtml = user.AccessKeys?.length
+            ? html`<button ${act('openModalWithAccessKeyDetails', index)} class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition whitespace-nowrap">View (${user.AccessKeys.length})</button>` : '-';
+        return html`<tr class="hover:bg-gray-50">
+            <td class="px-6 py-4 whitespace-nowrap text-xs font-medium text-[#204071] flex items-center">${vipBadge}${user.UserName}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">${passwordEnabled}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">${user.PasswordLastUsed}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-xs">${mfaEnabled}</td>
             <td class="px-6 py-4 whitespace-nowrap text-xs">${cliMfaCompliance}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">${groupsHtml}</td> 
+            <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">${groupsHtml}</td>
             <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">${rolesHtml}</td>
-            <td class="px-6 py-4 text-xs text-gray-500 break-words">${attachedPolicies}</td> 
-            <td class="px-6 py-4 text-xs text-gray-500 break-words">${inlinePolicies}</td> 
-            <td class="px-6 py-4 text-xs text-gray-500 align-top">${accessKeysHtml}</td>`;
-        tableBody.appendChild(row);
+            <td class="px-6 py-4 text-xs text-gray-500 break-words">${attachedPolicies}</td>
+            <td class="px-6 py-4 text-xs text-gray-500 break-words">${inlinePolicies}</td>
+            <td class="px-6 py-4 text-xs text-gray-500 align-top">${accessKeysHtml}</td>
+        </tr>`;
     });
+    setHtml(tableBody, join(rows));
 };
 
 
 const renderGroupsTable = (groups) => {
     const tableBody = document.getElementById('groups-table-body');
-    tableBody.innerHTML = '';
     if (!groups || groups.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="3" class="text-center text-gray-500 py-4">No groups were found.</td></tr>`;
+        setHtml(tableBody, html`<tr><td colspan="3" class="text-center text-gray-500 py-4">No groups were found.</td></tr>`);
         return;
     }
-    groups.forEach(group => {
-        const vipBadge = group.IsPrivileged ? '<span class="bg-yellow-200 text-yellow-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">VIP</span>' : '';
+    const rows = groups.map(group => {
+        const vipBadge = group.IsPrivileged ? html`<span class="bg-yellow-200 text-yellow-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">VIP</span>` : '';
         const attachedPolicies = group.AttachedPolicies.join(', ') || '-';
-        const row = document.createElement('tr');
-        row.className = 'hover:bg-gray-50';
-        row.innerHTML = `<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#204071] flex items-center">${vipBadge}${group.GroupName}</td> <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(group.CreateDate).toLocaleDateString()}</td> <td class="px-6 py-4 text-sm text-gray-500 break-words">${attachedPolicies}</td>`;
-        tableBody.appendChild(row);
+        return html`<tr class="hover:bg-gray-50">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#204071] flex items-center">${vipBadge}${group.GroupName}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(group.CreateDate).toLocaleDateString()}</td>
+            <td class="px-6 py-4 text-sm text-gray-500 break-words">${attachedPolicies}</td>
+        </tr>`;
     });
+    setHtml(tableBody, join(rows));
 };
 
 const renderRolesTable = (roles) => {
     const tableBody = document.getElementById('roles-table-body');
-    tableBody.innerHTML = '';
     if (!roles || roles.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="3" class="text-center text-gray-500 py-4">No roles were found.</td></tr>`;
+        setHtml(tableBody, html`<tr><td colspan="3" class="text-center text-gray-500 py-4">No roles were found.</td></tr>`);
         return;
     }
-    roles.forEach(role => {
-        const vipBadge = role.IsPrivileged ? '<span class="bg-yellow-200 text-yellow-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">VIP</span>' : '';
+    const rows = roles.map(role => {
+        const vipBadge = role.IsPrivileged ? html`<span class="bg-yellow-200 text-yellow-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">VIP</span>` : '';
         const attachedPolicies = role.AttachedPolicies.join(', ') || '-';
-        const row = document.createElement('tr');
-        row.className = 'hover:bg-gray-50';
-        row.innerHTML = `<td class="px-6 py-4 text-sm font-medium text-[#204071] break-words flex items-center">${vipBadge}${role.RoleName}</td> <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(role.CreateDate).toLocaleDateString()}</td> <td class="px-6 py-4 text-sm text-gray-500 break-words">${attachedPolicies}</td>`;
-        tableBody.appendChild(row);
+        return html`<tr class="hover:bg-gray-50">
+            <td class="px-6 py-4 text-sm font-medium text-[#204071] break-words flex items-center">${vipBadge}${role.RoleName}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(role.CreateDate).toLocaleDateString()}</td>
+            <td class="px-6 py-4 text-sm text-gray-500 break-words">${attachedPolicies}</td>
+        </tr>`;
     });
+    setHtml(tableBody, join(rows));
 };
 
 
 const renderPasswordPolicy = (policy) => {
     const container = document.getElementById('password-policy-container');
-    container.innerHTML = '';
-    
     if (policy.Error) {
-        container.innerHTML = `<p class="text-red-600 font-medium">There is no password policy configured for this account.</p>`;
+        setHtml(container, html`<p class="text-red-600 font-medium">There is no password policy configured for this account.</p>`);
         return;
     }
-    
-    // Verificaciones de política de contraseñas
     const checks = [
-        { desc: "Minimum length >= 12", ok: (policy.MinimumPasswordLength || 0) >= 12, val: policy.MinimumPasswordLength },
-        { desc: "Requires uppercase", ok: policy.RequireUppercaseCharacters, val: policy.RequireUppercaseCharacters },
-        { desc: "Requires lowercase letters", ok: policy.RequireLowercaseCharacters, val: policy.RequireLowercaseCharacters },
-        { desc: "Requires numbers", ok: policy.RequireNumbers, val: policy.RequireNumbers },
-        { desc: "Requires symbols", ok: policy.RequireSymbols, val: policy.RequireSymbols },
-        { desc: "Expiration ≤ 90 days", ok: policy.MaxPasswordAge && policy.MaxPasswordAge <= 90, val: policy.MaxPasswordAge },
-        { desc: "Reuse ≥ 4 passwords", ok: (policy.PasswordReusePrevention || 0) >= 4, val: policy.PasswordReusePrevention },
+        { desc: 'Minimum length >= 12', ok: (policy.MinimumPasswordLength || 0) >= 12, val: policy.MinimumPasswordLength },
+        { desc: 'Requires uppercase', ok: policy.RequireUppercaseCharacters, val: policy.RequireUppercaseCharacters },
+        { desc: 'Requires lowercase letters', ok: policy.RequireLowercaseCharacters, val: policy.RequireLowercaseCharacters },
+        { desc: 'Requires numbers', ok: policy.RequireNumbers, val: policy.RequireNumbers },
+        { desc: 'Requires symbols', ok: policy.RequireSymbols, val: policy.RequireSymbols },
+        { desc: 'Expiration ≤ 90 days', ok: policy.MaxPasswordAge && policy.MaxPasswordAge <= 90, val: policy.MaxPasswordAge },
+        { desc: 'Reuse ≥ 4 passwords', ok: (policy.PasswordReusePrevention || 0) >= 4, val: policy.PasswordReusePrevention },
     ];
-    
-    let checksHtml = `<h4 class="font-semibold text-md mb-2">Password Policy Compliance</h4>
-                      <div class="overflow-x-auto">
-                          <table class="min-w-full divide-y divide-gray-200 mb-6">
-                              <thead class="bg-gray-50">
-                                  <tr>
-                                      <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check</th>
-                                      <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                      <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Configured Value</th>
-                                  </tr>
-                              </thead>
-                              <tbody class="bg-white divide-y divide-gray-200">`;
-    
-    checks.forEach(({ desc, ok, val }) => {
-        const statusIcon = ok ? 
-            '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">OK</span>' : 
-            '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">KO</span>';
-        checksHtml += `<tr>
-                          <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${desc}</td>
-                          <td class="px-4 py-2 whitespace-nowrap text-sm">${statusIcon}</td>
-                          <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${val === undefined ? 'Not defined' : val}</td>
-                       </tr>`;
-    });
-    checksHtml += `</tbody></table></div>`;
-    
-    // NUEVA FUNCIONALIDAD: Verificar MFA del usuario root con detección de hardware
-    let rootMfaHtml = '';
-    if (policy.RootMFAStatus) {
-        const rootMfaStatus = policy.RootMFAStatus;
-        
-        rootMfaHtml = `<h4 class="font-semibold text-md mb-2 mt-6">Root User Security</h4>
-                       <div class="overflow-x-auto">
-                           <table class="min-w-full divide-y divide-gray-200 mb-6">
-                               <thead class="bg-gray-50">
-                                   <tr>
-                                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Security Check</th>
-                                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
-                                   </tr>
-                               </thead>
-                               <tbody class="bg-white divide-y divide-gray-200">`;
-        
-        if (rootMfaStatus.error) {
-            // Mostrar error si no se pudo verificar
-            rootMfaHtml += `<tr>
-                               <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">Root MFA Enabled</td>
-                               <td class="px-4 py-2 whitespace-nowrap text-sm">
-                                   <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">UNKNOWN</span>
-                               </td>
-                               <td class="px-4 py-2 text-sm text-gray-500 break-words">${rootMfaStatus.error}</td>
-                            </tr>`;
+    const checkRows = checks.map(({ desc, ok, val }) => html`<tr>
+        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${desc}</td>
+        <td class="px-4 py-2 whitespace-nowrap text-sm">${ok ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">OK</span>` : html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">KO</span>`}</td>
+        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${val === undefined ? 'Not defined' : val}</td>
+    </tr>`);
+    const root = policy.RootMFAStatus;
+    const rootRows = [];
+    const alerts = [];
+    if (root) {
+        if (root.error) {
+            rootRows.push(html`<tr><td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">Root MFA Enabled</td><td class="px-4 py-2 whitespace-nowrap text-sm"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">UNKNOWN</span></td><td class="px-4 py-2 text-sm text-gray-500 break-words">${root.error}</td></tr>`);
         } else {
-            // Fila 1: Estado del MFA del root
-            const mfaStatusIcon = rootMfaStatus.root_mfa_enabled ? 
-                '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">ENABLED</span>' : 
-                '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">DISABLED</span>';
-            
-            const mfaDetails = rootMfaStatus.root_mfa_enabled ? 
-                `MFA is properly configured for the root user${rootMfaStatus.virtual_mfa_devices > 0 ? ` (${rootMfaStatus.virtual_mfa_devices} virtual device(s))` : ''}` :
-                'Root user does not have MFA enabled - CRITICAL SECURITY RISK';
-            
-            rootMfaHtml += `<tr>
-                               <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">Root MFA Enabled</td>
-                               <td class="px-4 py-2 whitespace-nowrap text-sm">${mfaStatusIcon}</td>
-                               <td class="px-4 py-2 text-sm text-gray-500 break-words">${mfaDetails}</td>
-                            </tr>`;
-            
-            // Fila 2: Tipo de MFA (solo si MFA está habilitado)
-            if (rootMfaStatus.root_mfa_enabled && rootMfaStatus.iam6_check_available) {
-                let hardwareStatusIcon, hardwareDetails;
-                
-                if (rootMfaStatus.mfa_is_hardware === true) {
-                    hardwareStatusIcon = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">HARDWARE</span>';
-                    hardwareDetails = rootMfaStatus.iam6_finding_details || 'Hardware MFA detected via Security Hub compliance';
-                } else if (rootMfaStatus.mfa_is_hardware === false) {
-                    hardwareStatusIcon = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">VIRTUAL</span>';
-                    hardwareDetails = rootMfaStatus.iam6_finding_details || 'Virtual MFA detected - consider upgrading to hardware';
-                } else {
-                    hardwareStatusIcon = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">UNKNOWN</span>';
-                    hardwareDetails = rootMfaStatus.iam6_finding_details || 'Unable to determine MFA type via Security Hub';
-                }
-                
-                rootMfaHtml += `<tr>
-                                   <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">Root MFA Type</td>
-                                   <td class="px-4 py-2 whitespace-nowrap text-sm">${hardwareStatusIcon}</td>
-                                   <td class="px-4 py-2 text-sm text-gray-500 break-words">${hardwareDetails}</td>
-                                </tr>`;
-            } else if (rootMfaStatus.root_mfa_enabled && !rootMfaStatus.iam6_check_available) {
-                // MFA habilitado pero no se pudo verificar el tipo
-                rootMfaHtml += `<tr>
-                                   <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">Root MFA Type</td>
-                                   <td class="px-4 py-2 whitespace-nowrap text-sm">
-                                       <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">UNKNOWN</span>
-                                   </td>
-                                   <td class="px-4 py-2 text-sm text-gray-500 break-words">Security Hub check not available - unable to determine hardware vs virtual</td>
-                                </tr>`;
+            const mfaEnabled = root.root_mfa_enabled;
+            const enabledBadge = mfaEnabled ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">ENABLED</span>` : html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">DISABLED</span>`;
+            const mfaDetails = mfaEnabled ? `MFA is properly configured for the root user${root.virtual_mfa_devices > 0 ? ` (${root.virtual_mfa_devices} virtual device(s))` : ''}` : 'Root user does not have MFA enabled - CRITICAL SECURITY RISK';
+            rootRows.push(html`<tr><td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">Root MFA Enabled</td><td class="px-4 py-2 whitespace-nowrap text-sm">${enabledBadge}</td><td class="px-4 py-2 text-sm text-gray-500 break-words">${mfaDetails}</td></tr>`);
+            if (mfaEnabled && root.iam6_check_available) {
+                const hardware = root.mfa_is_hardware;
+                const badge = hardware === true ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">HARDWARE</span>` : hardware === false ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">VIRTUAL</span>` : html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">UNKNOWN</span>`;
+                const details = root.iam6_finding_details || (hardware === true ? 'Hardware MFA detected via Security Hub compliance' : hardware === false ? 'Virtual MFA detected - consider upgrading to hardware' : 'Unable to determine MFA type via Security Hub');
+                rootRows.push(html`<tr><td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">Root MFA Type</td><td class="px-4 py-2 whitespace-nowrap text-sm">${badge}</td><td class="px-4 py-2 text-sm text-gray-500 break-words">${details}</td></tr>`);
+            } else if (mfaEnabled) {
+                rootRows.push(html`<tr><td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">Root MFA Type</td><td class="px-4 py-2 whitespace-nowrap text-sm"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">UNKNOWN</span></td><td class="px-4 py-2 text-sm text-gray-500 break-words">Security Hub check not available - unable to determine hardware vs virtual</td></tr>`);
             }
-        }
-        
-        rootMfaHtml += `</tbody></table></div>`;
-        
-        // Alertas de seguridad solo para casos que requieren acción
-        if (rootMfaStatus.root_mfa_enabled === false) {
-            rootMfaHtml += `<div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                               <h5 class="text-red-800 font-semibold mb-2">Critical Security Recommendation</h5>
-                               <p class="text-red-700 text-sm">
-                                   The root user does not have MFA enabled. This represents a significant security risk. 
-                                   Enable MFA for the root user immediately through the AWS Console Security Credentials section.
-                               </p>
-                           </div>`;
-        } else if (rootMfaStatus.root_mfa_enabled && rootMfaStatus.mfa_is_hardware === false) {
-            rootMfaHtml += `<div class="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
-                               <h5 class="text-orange-800 font-semibold mb-2">Security Enhancement Recommendation</h5>
-                               <p class="text-orange-700 text-sm">
-                                   While the root user has MFA enabled, it appears to be using a virtual device. 
-                                   For enhanced security, consider upgrading to a hardware MFA device (AWS Security Hub finding IAM.6).
-                               </p>
-                           </div>`;
-        }
-        
-        // Detectar inconsistencia entre IAM y Security Hub
-        if (rootMfaStatus.root_mfa_enabled && 
-            rootMfaStatus.iam6_check_available && 
-            rootMfaStatus.virtual_mfa_devices > 0 && 
-            rootMfaStatus.mfa_is_hardware === true) {
-            
-            rootMfaHtml += `<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                               <h5 class="text-yellow-800 font-semibold mb-2">Potential Data Inconsistency Detected</h5>
-                               <div class="text-yellow-700 text-sm space-y-2">
-                                   <p><strong>Issue:</strong> IAM reports ${rootMfaStatus.virtual_mfa_devices} virtual MFA device(s) for the root user, but Security Hub indicates hardware MFA is enabled.</p>
-                                   
-                                   <p><strong>Possible causes:</strong></p>
-                                   <ul class="list-disc list-inside ml-4 space-y-1">
-                                       <li>Security Hub findings may take 12-24 hours to update after configuration changes</li>
-                                       <li>An IAM.6 finding may have been manually suppressed or resolved in Security Hub</li>
-                                       <li>AWS Config may not be properly evaluating the IAM.6 rule</li>
-                                       <li>There may be multiple MFA devices configured (both virtual and hardware)</li>
-                                   </ul>
-                                   
-                                   <p><strong>Recommendation:</strong> Manually verify the root user's MFA configuration in the AWS Console → IAM → Dashboard → Security Credentials to confirm the actual MFA type.</p>
-                               </div>
-                           </div>`;
+            if (root.root_mfa_enabled === false) alerts.push(html`<div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4"><h5 class="text-red-800 font-semibold mb-2">Critical Security Recommendation</h5><p class="text-red-700 text-sm">The root user does not have MFA enabled. This represents a significant security risk. Enable MFA for the root user immediately through the AWS Console Security Credentials section.</p></div>`);
+            else if (mfaEnabled && root.mfa_is_hardware === false) alerts.push(html`<div class="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4"><h5 class="text-orange-800 font-semibold mb-2">Security Enhancement Recommendation</h5><p class="text-orange-700 text-sm">While the root user has MFA enabled, it appears to be using a virtual device. For enhanced security, consider upgrading to a hardware MFA device (AWS Security Hub finding IAM.6).</p></div>`);
+            if (mfaEnabled && root.iam6_check_available && root.virtual_mfa_devices > 0 && root.mfa_is_hardware === true) alerts.push(html`<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4"><h5 class="text-yellow-800 font-semibold mb-2">Potential Data Inconsistency Detected</h5><div class="text-yellow-700 text-sm space-y-2"><p><strong>Issue:</strong> IAM reports ${root.virtual_mfa_devices} virtual MFA device(s) for the root user, but Security Hub indicates hardware MFA is enabled.</p><p><strong>Possible causes:</strong></p><ul class="list-disc list-inside ml-4 space-y-1"><li>Security Hub findings may take 12-24 hours to update after configuration changes</li><li>An IAM.6 finding may have been manually suppressed or resolved in Security Hub</li><li>AWS Config may not be properly evaluating the IAM.6 rule</li><li>There may be multiple MFA devices configured (both virtual and hardware)</li></ul><p><strong>Recommendation:</strong> Manually verify the root user's MFA configuration in the AWS Console → IAM → Dashboard → Security Credentials to confirm the actual MFA type.</p></div></div>`);
         }
     }
-    
-    // JSON raw de la política
-    const rawJsonHtml = `<h4 class="font-semibold text-md mb-2 mt-6">API Raw Response</h4>
-                         <pre class="bg-[#204071] text-white p-4 rounded-lg text-sm overflow-x-auto">
-                             <code>${JSON.stringify(policy, null, 2)}</code>
-                         </pre>`;
-    
-    container.innerHTML = checksHtml + rootMfaHtml + rawJsonHtml;
+    const policyJson = JSON.stringify(policy, null, 2);
+    setHtml(container, html`<h4 class="font-semibold text-md mb-2">Password Policy Compliance</h4><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 mb-6"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Configured Value</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(checkRows)}</tbody></table></div>
+        ${root ? html`<h4 class="font-semibold text-md mb-2 mt-6">Root User Security</h4><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 mb-6"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Security Check</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rootRows)}</tbody></table></div>${join(alerts)}` : ''}
+        <h4 class="font-semibold text-md mb-2 mt-6">API Raw Response</h4><pre class="bg-[#204071] text-white p-4 rounded-lg text-sm overflow-x-auto"><code id="iam-policy-raw-json"></code></pre>`);
+    container.querySelector('#iam-policy-raw-json').textContent = policyJson;
 };
 
 const renderIamDetailsViewHtml = () => {
@@ -1209,7 +820,7 @@ const getSelectedSearchType = () => {
 // 4. Función auxiliar para mostrar errores
 const showSearchError = (message) => {
     const resultsContainer = document.getElementById('iam-search-results-container');
-    resultsContainer.innerHTML = `<p class="text-yellow-600 font-medium">${message}</p>`;
+    setHtml(resultsContainer, html`<p class="text-yellow-600 font-medium">${message}</p>`);
 };
 
 const searchIamPrincipal = (rawInput) => {
@@ -1229,7 +840,7 @@ const searchIamPrincipal = (rawInput) => {
     }
 
     if (!window.iamApiData || !window.iamApiData.results) {
-        resultsContainer.innerHTML = `<p class="text-red-600 font-medium">No IAM data loaded. Please run an analysis first.</p>`;
+        setHtml(resultsContainer, html`<p class="text-red-600 font-medium">No IAM data loaded. Please run an analysis first.</p>`);
         log('Attempted permission search without IAM data.', 'error');
         return;
     }
@@ -1269,13 +880,7 @@ const analyzeCustomPolicy = async (policyName) => {
     searchBtn.disabled = true;
     btnText.textContent = 'Analyzing...';
     
-    resultsContainer.innerHTML = `
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <div class="flex items-center justify-center py-8">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#204071]"></div>
-                <span class="ml-3 text-gray-600">Analyzing custom policy...</span>
-            </div>
-        </div>`;
+    setHtml(resultsContainer, html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><div class="flex items-center justify-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#204071]"></div><span class="ml-3 text-gray-600">Analyzing custom policy...</span></div></div>`);
 
     const payload = {
         access_key: document.getElementById('access-key-input').value.trim(),
@@ -1307,11 +912,7 @@ const analyzeCustomPolicy = async (policyName) => {
 
     } catch (error) {
         log(`Error analyzing custom policy: ${error.message}`, 'error');
-        resultsContainer.innerHTML = `
-            <div class="bg-red-50 text-red-700 p-4 rounded-lg">
-                <h4 class="font-bold">Error Analyzing Policy</h4>
-                <p>${error.message}</p>
-            </div>`;
+        setHtml(resultsContainer, html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Error Analyzing Policy</h4><p>${error.message}</p></div>`);
     } finally {
         searchBtn.disabled = false;
         btnText.textContent = 'View Details';
@@ -1322,179 +923,49 @@ const analyzeCustomPolicy = async (policyName) => {
 const renderCustomPolicyAnalysis = (result) => {
     const resultsContainer = document.getElementById('iam-search-results-container');
     const { policy_name, metadata, analysis, used_by, policy_document } = result;
-    
-    // Determinar color del badge de privilegio
-    const getPrivilegeBadge = (level) => {
-        const badges = {
-            'critical': 'bg-red-100 text-red-800',
-            'high': 'bg-orange-100 text-orange-800',
-            'medium': 'bg-yellow-100 text-yellow-800',
-            'low': 'bg-green-100 text-green-800',
-            'unknown': 'bg-gray-100 text-gray-800'
-        };
-        return `<span class="px-3 py-1 text-sm font-semibold rounded-full ${badges[level] || badges.unknown}">${level.toUpperCase()}</span>`;
+    const privilegeColors = {
+        critical: 'bg-red-100 text-red-800', high: 'bg-orange-100 text-orange-800',
+        medium: 'bg-yellow-100 text-yellow-800', low: 'bg-green-100 text-green-800', unknown: 'bg-gray-100 text-gray-800'
     };
-
-    // Crear lista de servicios
-    const servicesHtml = analysis.services_affected && analysis.services_affected.length > 0 
-        ? analysis.services_affected.map(service => 
-            `<span class="inline-block bg-blue-100 text-blue-800 text-xs font-medium mr-2 mb-2 px-2.5 py-0.5 rounded-full">${service}</span>`
-        ).join('')
-        : '<span class="text-gray-500">No services detected</span>';
-
-    // Crear lista de preocupaciones de seguridad
-    const securityConcernsHtml = analysis.security_concerns && analysis.security_concerns.length > 0
-        ? analysis.security_concerns.map(concern => 
-            `<li class="text-red-700 text-sm">• ${concern}</li>`
-        ).join('')
-        : '<li class="text-green-700 text-sm">• No obvious security concerns detected</li>';
-
-    // Crear lista de entidades que usan la política
-    const entitiesHtml = createEntitiesUsageHtml(used_by);
-
-    resultsContainer.innerHTML = `
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h3 class="text-xl font-bold text-[#204071] mb-4">Custom Policy Analysis: ${policy_name}</h3>
-            
-            <!-- Metadata Section -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div class="bg-gray-50 p-4 rounded-lg">
-                    <h4 class="font-semibold text-gray-700 text-sm">Privilege Level</h4>
-                    <div class="mt-2">${getPrivilegeBadge(analysis.privilege_level)}</div>
-                </div>
-                <div class="bg-gray-50 p-4 rounded-lg">
-                    <h4 class="font-semibold text-gray-700 text-sm">Statements</h4>
-                    <p class="mt-2 text-lg font-bold text-[#204071]">${analysis.statement_count}</p>
-                    <p class="text-xs text-gray-600">${analysis.allows_statements} Allow, ${analysis.denies_statements} Deny</p>
-                </div>
-                <div class="bg-gray-50 p-4 rounded-lg">
-                    <h4 class="font-semibold text-gray-700 text-sm">Last Updated</h4>
-                    <p class="mt-2 text-sm font-mono text-gray-800">${new Date(metadata.update_date).toLocaleDateString()}</p>
-                </div>
-                <div class="bg-gray-50 p-4 rounded-lg">
-                    <h4 class="font-semibold text-gray-700 text-sm">Attachments</h4>
-                    <p class="mt-2 text-lg font-bold text-[#204071]">${metadata.attachment_count}</p>
-                </div>
-            </div>
-
-            <!-- Analysis Section -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                <div>
-                    <h4 class="font-semibold text-md mb-3 text-[#204071]">AWS Services Affected</h4>
-                    <div class="bg-gray-50 p-4 rounded-lg">
-                        ${servicesHtml}
-                    </div>
-                </div>
-                
-                <div>
-                    <h4 class="font-semibold text-md mb-3 text-[#204071]">Security Analysis</h4>
-                    <div class="bg-gray-50 p-4 rounded-lg">
-                        <ul>
-                            ${securityConcernsHtml}
-                        </ul>
-                        ${analysis.resources_wildcard ? '<p class="text-orange-600 text-sm mt-2">⚠️ Uses wildcard (*) resources</p>' : ''}
-                        ${analysis.has_conditions ? '<p class="text-green-600 text-sm mt-2">✓ Has security conditions</p>' : ''}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Entities using this policy -->
-            ${entitiesHtml}
-
-            <!-- Policy Document -->
-            <div class="mt-6">
-                <h4 class="font-semibold text-md mb-3 text-[#204071]">Policy Document</h4>
-                <div class="bg-[#204071] text-white p-4 rounded-lg overflow-x-auto">
-                    <pre class="text-xs font-mono whitespace-pre-wrap"><code>${JSON.stringify(policy_document, null, 2)}</code></pre>
-                </div>
-            </div>
-
-            <!-- Metadata Details -->
-            <div class="mt-6 pt-6 border-t border-gray-200">
-                <h4 class="font-semibold text-md mb-3 text-[#204071]">Policy Metadata</h4>
-                <div class="bg-gray-50 p-4 rounded-lg">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        <div><strong>Policy ID:</strong> <span class="font-mono">${metadata.policy_id}</span></div>
-                        <div><strong>Version ID:</strong> <span class="font-mono">${metadata.default_version_id}</span></div>
-                        <div><strong>Created:</strong> ${new Date(metadata.creation_date).toLocaleDateString()}</div>
-                        <div><strong>Attachable:</strong> ${metadata.is_attachable ? 'Yes' : 'No'}</div>
-                    </div>
-                </div>
-            </div>
+    const level = analysis.privilege_level;
+    const services = analysis.services_affected?.length
+        ? join(analysis.services_affected.map(service => html`<span class="inline-block bg-blue-100 text-blue-800 text-xs font-medium mr-2 mb-2 px-2.5 py-0.5 rounded-full">${service}</span>`))
+        : html`<span class="text-gray-500">No services detected</span>`;
+    const concerns = analysis.security_concerns?.length
+        ? join(analysis.security_concerns.map(concern => html`<li class="text-red-700 text-sm">• ${concern}</li>`))
+        : html`<li class="text-green-700 text-sm">• No obvious security concerns detected</li>`;
+    setHtml(resultsContainer, html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h3 class="text-xl font-bold text-[#204071] mb-4">Custom Policy Analysis: ${policy_name}</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="bg-gray-50 p-4 rounded-lg"><h4 class="font-semibold text-gray-700 text-sm">Privilege Level</h4><div class="mt-2"><span class="px-3 py-1 text-sm font-semibold rounded-full ${privilegeColors[level] || privilegeColors.unknown}">${String(level).toUpperCase()}</span></div></div>
+            <div class="bg-gray-50 p-4 rounded-lg"><h4 class="font-semibold text-gray-700 text-sm">Statements</h4><p class="mt-2 text-lg font-bold text-[#204071]">${analysis.statement_count}</p><p class="text-xs text-gray-600">${analysis.allows_statements} Allow, ${analysis.denies_statements} Deny</p></div>
+            <div class="bg-gray-50 p-4 rounded-lg"><h4 class="font-semibold text-gray-700 text-sm">Last Updated</h4><p class="mt-2 text-sm font-mono text-gray-800">${new Date(metadata.update_date).toLocaleDateString()}</p></div>
+            <div class="bg-gray-50 p-4 rounded-lg"><h4 class="font-semibold text-gray-700 text-sm">Attachments</h4><p class="mt-2 text-lg font-bold text-[#204071]">${metadata.attachment_count}</p></div>
         </div>
-    `;
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6"><div><h4 class="font-semibold text-md mb-3 text-[#204071]">AWS Services Affected</h4><div class="bg-gray-50 p-4 rounded-lg">${services}</div></div>
+        <div><h4 class="font-semibold text-md mb-3 text-[#204071]">Security Analysis</h4><div class="bg-gray-50 p-4 rounded-lg"><ul>${concerns}</ul>${analysis.resources_wildcard ? html`<p class="text-orange-600 text-sm mt-2">⚠️ Uses wildcard (*) resources</p>` : ''}${analysis.has_conditions ? html`<p class="text-green-600 text-sm mt-2">✓ Has security conditions</p>` : ''}</div></div></div>
+        ${createEntitiesUsageHtml(used_by)}
+        <div class="mt-6"><h4 class="font-semibold text-md mb-3 text-[#204071]">Policy Document</h4><div class="bg-[#204071] text-white p-4 rounded-lg overflow-x-auto"><pre class="text-xs font-mono whitespace-pre-wrap"><code id="custom-policy-json"></code></pre></div></div>
+        <div class="mt-6 pt-6 border-t border-gray-200"><h4 class="font-semibold text-md mb-3 text-[#204071]">Policy Metadata</h4><div class="bg-gray-50 p-4 rounded-lg"><div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div><strong>Policy ID:</strong> <span class="font-mono">${metadata.policy_id}</span></div><div><strong>Version ID:</strong> <span class="font-mono">${metadata.default_version_id}</span></div><div><strong>Created:</strong> ${new Date(metadata.creation_date).toLocaleDateString()}</div><div><strong>Attachable:</strong> ${metadata.is_attachable ? 'Yes' : 'No'}</div>
+        </div></div></div></div>`);
+    resultsContainer.querySelector('#custom-policy-json').textContent = JSON.stringify(policy_document, null, 2);
 };
 
 // 8. Función auxiliar para crear HTML de entidades que usan la política
 const createEntitiesUsageHtml = (used_by) => {
     if (!used_by || (used_by.users.length === 0 && used_by.groups.length === 0 && used_by.roles.length === 0)) {
-        return `
-            <div class="mb-6">
-                <h4 class="font-semibold text-md mb-3 text-[#204071]">Usage</h4>
-                <div class="bg-gray-50 p-4 rounded-lg">
-                    <p class="text-gray-500">This policy is not currently attached to any users, groups, or roles.</p>
-                </div>
-            </div>
-        `;
+        return html`<div class="mb-6"><h4 class="font-semibold text-md mb-3 text-[#204071]">Usage</h4><div class="bg-gray-50 p-4 rounded-lg"><p class="text-gray-500">This policy is not currently attached to any users, groups, or roles.</p></div></div>`;
     }
-
-    let entitiesHtml = `
-        <div class="mb-6">
-            <h4 class="font-semibold text-md mb-3 text-[#204071]">Entities Using This Policy</h4>
-            <div class="bg-gray-50 p-4 rounded-lg">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-    `;
-
-    // Usuarios
-    if (used_by.users.length > 0) {
-        entitiesHtml += `
-            <div>
-                <h5 class="font-medium text-sm text-gray-700 mb-2">Users (${used_by.users.length})</h5>
-                <ul class="space-y-1">
-                    ${used_by.users.map(user => `<li class="text-sm font-mono text-gray-600">• ${user.name}</li>`).join('')}
-                </ul>
-            </div>
-        `;
-    }
-
-    // Grupos
-    if (used_by.groups.length > 0) {
-        entitiesHtml += `
-            <div>
-                <h5 class="font-medium text-sm text-gray-700 mb-2">Groups (${used_by.groups.length})</h5>
-                <ul class="space-y-1">
-                    ${used_by.groups.map(group => `<li class="text-sm font-mono text-gray-600">• ${group.name}</li>`).join('')}
-                </ul>
-            </div>
-        `;
-    }
-
-    // Roles
-    if (used_by.roles.length > 0) {
-        entitiesHtml += `
-            <div>
-                <h5 class="font-medium text-sm text-gray-700 mb-2">Roles (${used_by.roles.length})</h5>
-                <ul class="space-y-1">
-                    ${used_by.roles.map(role => `<li class="text-sm font-mono text-gray-600">• ${role.name}</li>`).join('')}
-                </ul>
-            </div>
-        `;
-    }
-
-    entitiesHtml += `
-                </div>
-            </div>
-        </div>
-    `;
-
-    return entitiesHtml;
+    const entityList = (title, entities) => entities.length ? html`<div><h5 class="font-medium text-sm text-gray-700 mb-2">${title} (${entities.length})</h5><ul class="space-y-1">${join(entities.map(entity => html`<li class="text-sm font-mono text-gray-600">• ${entity.name}</li>`))}</ul></div>` : '';
+    return html`<div class="mb-6"><h4 class="font-semibold text-md mb-3 text-[#204071]">Entities Using This Policy</h4><div class="bg-gray-50 p-4 rounded-lg"><div class="grid grid-cols-1 md:grid-cols-3 gap-4">${entityList('Users', used_by.users)}${entityList('Groups', used_by.groups)}${entityList('Roles', used_by.roles)}</div></div></div>`;
 };
 
 // 9. Función original renombrada
 const renderIamPrincipalDetails = (principal, type, searchedTerm) => {
     const resultsContainer = document.getElementById('iam-search-results-container');
     if (!principal) {
-        resultsContainer.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Not Found</h4><p>Could not find any user, group, or role with the name or ARN '${searchedTerm}'.</p></div>`;
+        setHtml(resultsContainer, html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Not Found</h4><p>Could not find any user, group, or role with the name or ARN '${searchedTerm}'.</p></div>`);
         log(`IAM Principal '${searchedTerm}' not found.`, 'error');
         return;
     }
@@ -1538,12 +1009,8 @@ const renderIamPrincipalDetails = (principal, type, searchedTerm) => {
     const formattedJson = JSON.stringify(detailsToShow, null, 2);
     log(`Showing details for ${type}: ${name}`, 'success');
 
-    resultsContainer.innerHTML = `
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h3 class="text-xl font-bold text-[#204071] mb-4">Details for ${type}: ${name}</h3>
-            <pre class="bg-[#204071] text-white p-4 rounded-lg text-xs font-mono overflow-x-auto">${formattedJson}</pre>
-        </div>
-    `;
+    setHtml(resultsContainer, html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><h3 class="text-xl font-bold text-[#204071] mb-4">Details for ${type}: ${name}</h3><pre id="iam-principal-json" class="bg-[#204071] text-white p-4 rounded-lg text-xs font-mono overflow-x-auto"></pre></div>`);
+    resultsContainer.querySelector('#iam-principal-json').textContent = formattedJson;
 };
 
 const renderServiceDescription = (serviceInfo) => {

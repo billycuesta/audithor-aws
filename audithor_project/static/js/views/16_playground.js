@@ -5,12 +5,13 @@
 
 // --- IMPORTS ---
 import { handleTabClick, log } from '../utils.js';
+import { html, join, setHtml } from '../safe_html.js';
 
 
 // --- MAIN VIEW FUNCTION (EXPORTED) ---
 export const buildPlaygroundView = () => {
     const container = document.getElementById('playground-view');
-    container.innerHTML = `
+    setHtml(container, html`
         <header class="flex justify-between items-center mb-6">
             <div>
                 <h2 class="text-2xl font-bold text-[#204071]">Playground</h2>
@@ -212,7 +213,7 @@ export const buildPlaygroundView = () => {
             </div>
             <div id="lambda-simulation-results-container" class="mt-6"></div>
         </div>
-    `;
+    `);
 
     const tabsNav = document.getElementById('playground-tabs');
     if (tabsNav) tabsNav.addEventListener('click', handleTabClick(tabsNav, '.playground-tab-content'));
@@ -246,11 +247,11 @@ const runPlaygroundAnalysis = async () => {
     const sourceArn = document.getElementById('pg-source-arn').value.trim();
     const targetArn = document.getElementById('pg-target-arn').value.trim();
     const resultsContainer = document.getElementById('playground-results-container');
-    resultsContainer.innerHTML = '';
+    setHtml(resultsContainer, html``);
 
     if (!sourceArn || !targetArn) {
         log('Source and destination ARNs are required.', 'error');
-        resultsContainer.innerHTML = '<p class="text-red-600 font-medium">Error: Please enter both ARNs.</p>';
+        setHtml(resultsContainer, html`<p class="text-red-600 font-medium">Error: Please enter both ARNs.</p>`);
         return;
     }
 
@@ -300,10 +301,10 @@ const runPlaygroundAnalysis = async () => {
     } catch(e) {
         if (e.name === 'AbortError') {
             log('Path analysis timed out after 30 seconds.', 'error');
-            resultsContainer.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Timeout Error</h4><p>The analysis took too long to complete. Please check your network connection and try again.</p></div>`;
+            setHtml(resultsContainer, html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Timeout Error</h4><p>The analysis took too long to complete. Please check your network connection and try again.</p></div>`);
         } else {
             log(`Path analysis error: ${e.message}`, 'error');
-            resultsContainer.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Error</h4><p>${e.message}</p></div>`;
+            setHtml(resultsContainer, html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Error</h4><p>${e.message}</p></div>`);
         }
     } finally {
         runBtn.disabled = false;
@@ -317,25 +318,22 @@ const renderPlaygroundResults = () => {
     const container = document.getElementById('playground-results-container');
     const { status, reason, tables, detail_tables } = window.playgroundApiData.results;
 
-    let resultHtml = '';
+    const parts = [];
     if (status === 'REACHABLE') {
-        resultHtml = `
+        parts.push(html`
             <div class="bg-green-50 text-green-800 p-4 rounded-lg">
                 <h4 class="text-lg font-bold flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="w-6 h-6 mr-2" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
                     Status: REACHABLE
                 </h4>
             </div>
-        `;
-        // Mostrar las tablas de resumen del path solo si es alcanzable
-        if(tables && tables.length > 0) {
-            tables.forEach(table => {
-                resultHtml += `<pre class="bg-[#204071] text-white p-4 rounded-lg text-xs font-mono overflow-x-auto mt-4">${table}</pre>`;
-            });
+        `);
+        // Show path summaries only when the path is reachable.
+        if (tables && tables.length > 0) {
+            parts.push(...tables.map(table => html`<pre class="bg-[#204071] text-white p-4 rounded-lg text-xs font-mono overflow-x-auto mt-4">${table}</pre>`));
         }
-        
-    } else { // UNREACHABLE
-        resultHtml = `
+    } else {
+        parts.push(html`
             <div class="bg-red-50 text-red-800 p-4 rounded-lg">
                 <h4 class="text-lg font-bold flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="w-6 h-6 mr-2" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
@@ -343,51 +341,48 @@ const renderPlaygroundResults = () => {
                 </h4>
                 <p class="mt-2 font-mono text-sm"><b>Reason:</b> ${reason}</p>
             </div>
-        `;
+        `);
     }
 
-    // --- CAMBIO PRINCIPAL ---
-    // Este bloque ahora se ejecuta para AMBOS casos: REACHABLE y UNREACHABLE
+    // Include resource details for both reachable and unreachable paths.
     if (detail_tables && Object.keys(detail_tables).length > 0) {
-        resultHtml += '<h3 class="text-xl font-bold text-[#204071] mt-8 mb-4 border-b pb-2">Details of Involved Resources</h3>';
+        parts.push(html`<h3 class="text-xl font-bold text-[#204071] mt-8 mb-4 border-b pb-2">Details of Involved Resources</h3>`);
         for (const resourceId in detail_tables) {
-            // Añadimos un pequeño encabezado para cada recurso para mayor claridad
-            resultHtml += `<div class="mt-4">
+            parts.push(html`<div class="mt-4">
                 <p class="text-sm font-semibold text-gray-600 mb-1">Resource: <span class="font-mono text-gray-800">${resourceId}</span></p>
                 <pre class="bg-gray-800 text-gray-200 p-4 rounded-lg text-xs font-mono overflow-x-auto">${detail_tables[resourceId]}</pre>
-            </div>`;
+            </div>`);
         }
     }
 
-    container.innerHTML = resultHtml;
+    setHtml(container, join(parts));
 };
 
 const renderSslScanResults = (results) => {
     const resultsContainer = document.getElementById('sslscan-results-container');
     if (!results || results.length === 0) {
-        resultsContainer.innerHTML = '';
+        setHtml(resultsContainer, html``);
         return;
     }
 
-    let resultsHtml = '';
-    results.forEach(result => {
-        let resultOutput = '';
+    const resultsHtml = results.map(result => {
+        let resultOutput;
         if (result.error) {
-            resultOutput = `<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Error</h4><p>${result.error}</p></div>`;
+            resultOutput = html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Error</h4><p>${result.error}</p></div>`;
         } else if (result.output && result.output.trim() !== '') {
-            resultOutput = `<pre class="bg-gray-900 text-white p-4 rounded-lg text-xs font-mono overflow-x-auto">${result.output}</pre>`;
+            resultOutput = html`<pre class="bg-gray-900 text-white p-4 rounded-lg text-xs font-mono overflow-x-auto">${result.output}</pre>`;
         } else {
-            resultOutput = `<div class="bg-yellow-50 text-yellow-700 p-4 rounded-lg"><h4 class="font-bold">Warning</h4><p>The scan finished without returning results for this target.</p></div>`;
+            resultOutput = html`<div class="bg-yellow-50 text-yellow-700 p-4 rounded-lg"><h4 class="font-bold">Warning</h4><p>The scan finished without returning results for this target.</p></div>`;
         }
-        
-        resultsHtml += `
+
+        return html`
             <div class="mb-6">
                 <h4 class="font-bold text-lg mb-2 text-[#204071]">Result for: ${result.target}</h4>
                 ${resultOutput}
             </div>
         `;
     });
-    resultsContainer.innerHTML = resultsHtml;
+    setHtml(resultsContainer, join(resultsHtml));
 };
 
 const runSslScan = async () => {
@@ -399,12 +394,12 @@ const runSslScan = async () => {
     const target = targetInput.value.trim();
     
     if (!target) {
-        resultsContainer.innerHTML = '<p class="text-red-600 font-medium">Please enter one or more comma-separated domains/IPs.</p>';
+        setHtml(resultsContainer, html`<p class="text-red-600 font-medium">Please enter one or more comma-separated domains/IPs.</p>`);
         return;
     }
 
     log(`Starting sslscan for: ${target}...`, 'info');
-    resultsContainer.innerHTML = '';
+    setHtml(resultsContainer, html``);
     runBtn.disabled = true;
     spinner.classList.remove('hidden');
     btnText.textContent = 'Scanning...';
@@ -433,10 +428,10 @@ const runSslScan = async () => {
             } catch (e) {
         if (e.name === 'AbortError') {
             log('SSL scan timed out after 2 minutes.', 'error');
-            resultsContainer.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Timeout Error</h4><p>The SSL scan took too long to complete. This may be due to network connectivity issues or unresponsive targets.</p></div>`;
+            setHtml(resultsContainer, html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Timeout Error</h4><p>The SSL scan took too long to complete. This may be due to network connectivity issues or unresponsive targets.</p></div>`);
         } else {
             log(`sslscan error: ${e.message}`, 'error');
-            resultsContainer.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Error</h4><p>${e.message}</p></div>`;
+            setHtml(resultsContainer, html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Error</h4><p>${e.message}</p></div>`);
         }
     } finally {
         runBtn.disabled = false;
@@ -461,8 +456,7 @@ const runSimulation = async () => {
     }
     
     if (!username || selectedActions.length === 0) {
-        document.getElementById('simulation-results-container').innerHTML = 
-            '<p class="text-red-600 font-medium">Please enter a username and select at least one action.</p>';
+        setHtml(document.getElementById('simulation-results-container'), html`<p class="text-red-600 font-medium">Please enter a username and select at least one action.</p>`);
         return;
     }
 
@@ -472,8 +466,7 @@ const runSimulation = async () => {
     const sessionTokenInput = document.getElementById('session-token-input');
     
     if (!accessKeyInput.value.trim() || !secretKeyInput.value.trim()) {
-        document.getElementById('simulation-results-container').innerHTML = 
-            '<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Credentials Required</h4><p>Please enter your AWS credentials in the header before running the simulation.</p></div>';
+        setHtml(document.getElementById('simulation-results-container'), html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Credentials Required</h4><p>Please enter your AWS credentials in the header before running the simulation.</p></div>`);
         return;
     }
     
@@ -517,12 +510,10 @@ const runSimulation = async () => {
     } catch (e) {
         if (e.name === 'AbortError') {
             log('Simulation timed out after 30 seconds.', 'error');
-            document.getElementById('simulation-results-container').innerHTML = 
-                `<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Timeout Error</h4><p>The simulation took too long to complete. Please check your credentials and network connection.</p></div>`;
+            setHtml(document.getElementById('simulation-results-container'), html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Timeout Error</h4><p>The simulation took too long to complete. Please check your credentials and network connection.</p></div>`);
         } else {
             log(`Simulation error: ${e.message}`, 'error');
-            document.getElementById('simulation-results-container').innerHTML = 
-                `<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Error</h4><p>${e.message}</p></div>`;
+            setHtml(document.getElementById('simulation-results-container'), html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Error</h4><p>${e.message}</p></div>`);
         }
     } finally {
         btn.disabled = false;
@@ -537,48 +528,32 @@ const renderSimulationResults = (results) => {
     // Determine context label
     const contextText = results.context_applied && results.context_applied.length > 0 ? 'With MFA Context' : 'Without MFA Context';
     
-    let resultHtml = `
+    const rows = results.simulation_results.map(result => {
+        const decisionClass = result.decision === 'allowed' ? 'text-green-800 bg-green-100' : 'text-red-800 bg-red-100';
+        const count = result.matched_statements?.length || 0;
+        const matchedPolicies = count === 0 ? 'No matching policies' : count === 1 ? '1 policy rule matched' : `${count} policy rules matched`;
+        return html`<tr class="hover:bg-gray-50">
+            <td class="px-4 py-4 text-sm font-mono">${result.action}</td>
+            <td class="px-4 py-4 text-sm"><span class="px-2 py-1 text-xs font-semibold rounded-full ${decisionClass}">${result.decision.toUpperCase()}</span></td>
+            <td class="px-4 py-4 text-sm text-gray-600">${matchedPolicies}</td>
+        </tr>`;
+    });
+    setHtml(container, html`
         <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
             <h4 class="font-bold text-lg mb-2 text-[#204071]">Policy Simulation Results</h4>
             <div class="mb-4 p-3 bg-gray-50 rounded">
                 <p class="text-sm"><strong>User:</strong> <span class="font-mono">${results.username}</span></p>
                 <p class="text-sm"><strong>Context:</strong> ${contextText}</p>
             </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Decision</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">`;
-    
-    results.simulation_results.forEach(result => {
-        const decisionClass = result.decision === 'allowed' ? 'text-green-800 bg-green-100' : 'text-red-800 bg-red-100';
-        let matchedPolicies = 'No matching policies';
-        if (result.matched_statements && result.matched_statements.length > 0) {
-            const count = result.matched_statements.length;
-            matchedPolicies = count === 1 
-                ? '1 policy rule matched' 
-                : `${count} policy rules matched`;
-        }
-        
-        resultHtml += `
-            <tr class="hover:bg-gray-50">
-                <td class="px-4 py-4 text-sm font-mono">${result.action}</td>
-                <td class="px-4 py-4 text-sm">
-                    <span class="px-2 py-1 text-xs font-semibold rounded-full ${decisionClass}">
-                        ${result.decision.toUpperCase()}
-                    </span>
-                </td>
-                <td class="px-4 py-4 text-sm text-gray-600">${matchedPolicies}</td>
-            </tr>`;
-    });
-    
-    resultHtml += `</tbody></table></div></div>`;
-    container.innerHTML = resultHtml;
+            <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50"><tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Decision</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
+                </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody>
+            </table></div>
+        </div>
+    `);
 };
 
 const runLambdaSimulation = async () => {
@@ -597,8 +572,7 @@ const runLambdaSimulation = async () => {
     }
     
     if (!functionName || !region || selectedActions.length === 0) {
-        document.getElementById('lambda-simulation-results-container').innerHTML = 
-            '<p class="text-red-600 font-medium">Please enter a function name, select a region, and choose at least one action.</p>';
+        setHtml(document.getElementById('lambda-simulation-results-container'), html`<p class="text-red-600 font-medium">Please enter a function name, select a region, and choose at least one action.</p>`);
         return;
     }
 
@@ -608,8 +582,7 @@ const runLambdaSimulation = async () => {
     const sessionTokenInput = document.getElementById('session-token-input');
     
     if (!accessKeyInput.value.trim() || !secretKeyInput.value.trim()) {
-        document.getElementById('lambda-simulation-results-container').innerHTML = 
-            '<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Credentials Required</h4><p>Please enter your AWS credentials in the header before running the simulation.</p></div>';
+        setHtml(document.getElementById('lambda-simulation-results-container'), html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Credentials Required</h4><p>Please enter your AWS credentials in the header before running the simulation.</p></div>`);
         return;
     }
     
@@ -653,12 +626,10 @@ const runLambdaSimulation = async () => {
     } catch (e) {
         if (e.name === 'AbortError') {
             log('Lambda simulation timed out after 30 seconds.', 'error');
-            document.getElementById('lambda-simulation-results-container').innerHTML = 
-                `<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Timeout Error</h4><p>The simulation took too long to complete. Please check your credentials and network connection.</p></div>`;
+            setHtml(document.getElementById('lambda-simulation-results-container'), html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Timeout Error</h4><p>The simulation took too long to complete. Please check your credentials and network connection.</p></div>`);
         } else {
             log(`Lambda simulation error: ${e.message}`, 'error');
-            document.getElementById('lambda-simulation-results-container').innerHTML = 
-                `<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Error</h4><p>${e.message}</p></div>`;
+            setHtml(document.getElementById('lambda-simulation-results-container'), html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Error</h4><p>${e.message}</p></div>`);
         }
     } finally {
         btn.disabled = false;
@@ -670,28 +641,8 @@ const runLambdaSimulation = async () => {
 const renderLambdaSimulationResults = (results) => {
     const container = document.getElementById('lambda-simulation-results-container');
     
-    let resultHtml = `
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h4 class="font-bold text-lg mb-2 text-[#204071]">Lambda Permission Analysis</h4>
-            <div class="mb-4 p-3 bg-gray-50 rounded">
-                <p class="text-sm"><strong>Function:</strong> <span class="font-mono">${results.function_name}</span></p>
-                <p class="text-sm"><strong>Execution Role:</strong> <span class="font-mono text-xs">${results.execution_role_arn}</span></p>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Decision</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Risk Level</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">`;
-    
-    results.simulation_results.forEach(result => {
+    const rows = results.simulation_results.map(result => {
         const decisionClass = result.decision === 'allowed' ? 'text-green-800 bg-green-100' : 'text-red-800 bg-red-100';
-        
-        // Assess risk level for allowed actions
         let riskLevel = 'N/A';
         let riskClass = 'text-gray-600';
         if (result.decision === 'allowed') {
@@ -706,21 +657,28 @@ const renderLambdaSimulationResults = (results) => {
                 riskClass = 'text-yellow-600';
             }
         }
-        
-        resultHtml += `
-            <tr class="hover:bg-gray-50">
-                <td class="px-4 py-4 text-sm font-mono">${result.action}</td>
-                <td class="px-4 py-4 text-sm">
-                    <span class="px-2 py-1 text-xs font-semibold rounded-full ${decisionClass}">
-                        ${result.decision.toUpperCase()}
-                    </span>
-                </td>
-                <td class="px-4 py-4 text-sm ${riskClass}">${riskLevel}</td>
-            </tr>`;
+        return html`<tr class="hover:bg-gray-50">
+            <td class="px-4 py-4 text-sm font-mono">${result.action}</td>
+            <td class="px-4 py-4 text-sm"><span class="px-2 py-1 text-xs font-semibold rounded-full ${decisionClass}">${result.decision.toUpperCase()}</span></td>
+            <td class="px-4 py-4 text-sm ${riskClass}">${riskLevel}</td>
+        </tr>`;
     });
-    
-    resultHtml += `</tbody></table></div></div>`;
-    container.innerHTML = resultHtml;
+    setHtml(container, html`
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <h4 class="font-bold text-lg mb-2 text-[#204071]">Lambda Permission Analysis</h4>
+            <div class="mb-4 p-3 bg-gray-50 rounded">
+                <p class="text-sm"><strong>Function:</strong> <span class="font-mono">${results.function_name}</span></p>
+                <p class="text-sm"><strong>Execution Role:</strong> <span class="font-mono text-xs">${results.execution_role_arn}</span></p>
+            </div>
+            <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50"><tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Decision</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Risk Level</th>
+                </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody>
+            </table></div>
+        </div>
+    `);
 };
 
 const populateLambdaRegionSelect = () => {
@@ -728,7 +686,7 @@ const populateLambdaRegionSelect = () => {
     if (!select || !window.allAvailableRegions) return;
     
     // Clear existing options
-    select.innerHTML = '<option value="">Select a region...</option>';
+    setHtml(select, html`<option value="">Select a region...</option>`);
     
     // Populate with all available regions
     window.allAvailableRegions.forEach(region => {
