@@ -1,4 +1,5 @@
 import { coverageOf, isMigratedCollector, failedCollectionResponse } from './collection.js';
+import { html, raw, setHtml, act, installActionDelegation } from './safe_html.js';
 /**
  * app.js
  * Fichero principal (el "cerebro") de la lógica de la aplicación AudiThor.
@@ -103,11 +104,11 @@ const loadSidebarIcons = () => {
                 const currentText = span.textContent.trim();
                 
                 // Crear nueva estructura: icono + texto en contenedores separados
-                span.innerHTML = '';
+                span.replaceChildren();
                 
                 // Crear contenedor para el icono
                 const iconDiv = document.createElement('div');
-                iconDiv.innerHTML = SIDEBAR_ICONS[iconKey];
+                setHtml(iconDiv, raw(SIDEBAR_ICONS[iconKey]));
                 iconDiv.className = 'flex-shrink-0';
                 
                 // Crear contenedor para el texto
@@ -128,6 +129,11 @@ const loadSidebarIcons = () => {
 
 // --- NUEVO: FUNCIONES DE GESTIÓN DE SCOPE ---
 const SCOPE_STORAGE_KEY = 'audiThorScopedResources';
+
+export const isPlainObject = value => value !== null && typeof value === 'object' && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+export const isValidScopeData = value => isPlainObject(value) && Object.values(value).every(entry => isPlainObject(entry));
+export const isImportFileSizeAllowed = size => Number.isFinite(size) && size <= 200 * 1024 * 1024;
+export const validateImportShape = data => isPlainObject(data) && isPlainObject(data.metadata) && isPlainObject(data.results);
 
 const loadScopedResources = () => {
     const stored = localStorage.getItem(SCOPE_STORAGE_KEY);
@@ -279,7 +285,7 @@ const openNotesModal = (noteId = null) => {
     saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
     newSaveBtn.addEventListener('click', handleSave);
 
-    cancelBtn.onclick = () => modal.classList.add('hidden');
+    cancelBtn.addEventListener('click', () => modal.classList.add('hidden'));
     modal.classList.remove('hidden');
     titleInput.focus();
 };
@@ -366,7 +372,7 @@ const openScopeModal = (arn, currentComment = '') => {
         modal.classList.add('hidden');
     });
 
-    closeBtn.onclick = () => modal.classList.add('hidden');
+    closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
 
     modal.classList.remove('hidden');
     textarea.focus();
@@ -480,8 +486,8 @@ const runAnalysisFromInputs = async (source = 'main') => {
 
     // Resetear estado
     window.iamApiData = null; window.securityHubApiData = null; window.exposureApiData = null; window.guarddutyApiData = null; window.wafApiData = null; window.cloudtrailApiData = null; window.cloudwatchApiData = null; window.inspectorApiData = null; window.acmApiData = null; window.computeApiData = null; window.databasesApiData = null; window.networkPoliciesApiData = null; window.connectivityApiData = null; window.playgroundApiData = null; window.allAvailableRegions = []; window.lastCloudtrailLookupResults = []; window.federationApiData = null; window.configSHApiData = null; window.configSHStatusApiData = null; window.kmsApiData = null; window.ecrApiData = null; window.codepipelineApiData = null; window.secretsManagerApiData = null; window.inventoryApiData = null;
-    document.querySelectorAll('.view').forEach(v => v.innerHTML = '');
-    document.getElementById('iam-view').innerHTML = createInitialEmptyState();
+    document.querySelectorAll('.view').forEach(v => v.replaceChildren());
+    setHtml(document.getElementById('iam-view'), raw(createInitialEmptyState()));
     
     log('Starting full analysis...', 'info');
     const accessKey = accessInput.value.trim(); 
@@ -685,34 +691,34 @@ const buildAuditorNotesView = () => {
     });
 
     const scopedRows = scopedEntries.length
-        ? scopedEntries.map(([arn, data]) => `
+        ? scopedEntries.map(([arn, data]) => html`
             <tr class="hover:bg-gray-50">
                 <td class="px-4 py-3 text-xs text-gray-700 font-mono break-all">${arn}</td>
                 <td class="px-4 py-3 text-sm text-gray-700 break-words">${data?.comment || ''}</td>
                 <td class="px-4 py-3 text-sm text-right whitespace-nowrap">
-                    <button onclick="openScopeModal('${arn}', '${encodeURIComponent(data?.comment || '')}')" class="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 mr-2">Edit</button>
-                    <button onclick="removeResourceScope('${arn}')" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">Remove</button>
+                    <button ${act('openScopeModal', arn, encodeURIComponent(data?.comment || ''))} class="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 mr-2">Edit</button>
+                    <button ${act('removeResourceScope', arn)} class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">Remove</button>
                 </td>
             </tr>
-        `).join('')
-        : `<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">No scoped resources yet.</td></tr>`;
+        `)
+        : html`<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">No scoped resources yet.</td></tr>`;
 
     const noteRows = notes.length
-        ? notes.map(note => `
+        ? notes.map(note => html`
             <tr class="hover:bg-gray-50">
                 <td class="px-4 py-3 text-sm text-gray-700">${note.title || 'Untitled note'}</td>
                 <td class="px-4 py-3 text-xs text-gray-600 font-mono break-all">${note.arn || '-'}</td>
                 <td class="px-4 py-3 text-sm text-gray-600">${new Date(note.lastModified || note.timestamp).toLocaleString()}</td>
                 <td class="px-4 py-3 text-sm text-right whitespace-nowrap">
-                    <button onclick="showNoteDetails(${note.id})" class="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200 mr-2">View</button>
-                    <button onclick="openNotesModal(${note.id})" class="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 mr-2">Edit</button>
-                    <button onclick="deleteAuditorNote(${note.id})" class="px-3 py-1.5 bg-red-100 text-red-700 rounded-md hover:bg-red-200">Delete</button>
+                    <button ${act('showNoteDetails', note.id)} class="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200 mr-2">View</button>
+                    <button ${act('openNotesModal', note.id)} class="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 mr-2">Edit</button>
+                    <button ${act('deleteAuditorNote', note.id)} class="px-3 py-1.5 bg-red-100 text-red-700 rounded-md hover:bg-red-200">Delete</button>
                 </td>
             </tr>
-        `).join('')
-        : `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-500">No notes available yet.</td></tr>`;
+        `)
+        : html`<tr><td colspan="4" class="px-4 py-8 text-center text-gray-500">No notes available yet.</td></tr>`;
 
-    container.innerHTML = `
+    setHtml(container, html`
         <header class="flex flex-wrap items-center justify-between gap-3 mb-6">
             <div>
                 <h2 class="text-2xl font-bold text-[#204071]">Auditor Notes</h2>
@@ -759,7 +765,7 @@ const buildAuditorNotesView = () => {
                 </table>
             </div>
         </section>
-    `;
+    `);
 
     const addBtn = document.getElementById('auditor-new-note-btn');
     if (addBtn) {
@@ -853,6 +859,10 @@ const exportResultsToJson = () => {
 
 const handleJsonImport = (event) => {
     const file = event.target.files[0];
+    if (file && !isImportFileSizeAllowed(file.size)) {
+        log('Import rejected: file exceeds the 200 MiB size limit.', 'error');
+        return;
+    }
     if (!file) {
         log('No file selected.', 'info');
         return;
@@ -865,7 +875,7 @@ const handleJsonImport = (event) => {
         try {
             const importedData = JSON.parse(e.target.result);
 
-            if (!importedData.metadata || !importedData.results) {
+            if (!validateImportShape(importedData)) {
                 throw new Error("The JSON file does not have the expected structure. (metadata/results).");
             }
 
@@ -912,11 +922,12 @@ const handleJsonImport = (event) => {
 
             log('Data imported into the application state.', 'success');
             
-            if (results.audiThorScopeData) {
+            if (isValidScopeData(results.audiThorScopeData)) {
                 window.scopedResources = results.audiThorScopeData;
                 saveScopedResources(); // Guardarlo en localStorage
                 log(`Importados ${Object.keys(window.scopedResources).length} recursos marcados.`, 'success');
             } else {
+                if (results.audiThorScopeData !== undefined) log('Ignoring invalid imported scope data.', 'warning');
                 window.scopedResources = {}; // Limpiar si el fichero no tiene datos de scope
                 saveScopedResources();
             }
@@ -984,7 +995,7 @@ const populateGeminiRegionFilter = (findings) => {
     });
 
     // Clear existing options except "All Regions"
-    select.innerHTML = '<option value="all">All Regions</option>';
+    setHtml(select, html`<option value="all">All Regions</option>`);
     
     const sortedRegions = Array.from(regions).sort();
     sortedRegions.forEach(region => {
@@ -1013,19 +1024,19 @@ const showNoteDetails = (noteId) => {
 
     titleEl.textContent = note.title;
 
-    let arnHtml = note.arn ? `
+    const arnHtml = note.arn ? html`
         <div class="mt-2">
             <p class="font-semibold text-gray-700">Recurso Asociado:</p>
             <code class="text-xs text-gray-800 bg-gray-100 p-2 rounded-md block break-all">${note.arn}</code>
         </div>
     ` : '';
 
-    contentEl.innerHTML = `
+    setHtml(contentEl, html`
         <p class="font-semibold text-gray-700">Observaciones:</p>
-        <div class="text-gray-800 bg-gray-50 p-3 rounded-md border">${note.content.replace(/\n/g, '<br>')}</div>
+        <div class="text-gray-800 bg-gray-50 p-3 rounded-md border">${note.content.split('\n').map((line, index) => html`${index ? raw('<br>') : ''}${line}`)}</div>
         ${arnHtml}
         <p class="text-xs text-gray-400 mt-4">Creada: ${new Date(note.timestamp).toLocaleString()}</p>
-    `;
+    `);
 
     // Limpiamos listeners para evitar duplicados
     const newEditBtn = editBtn.cloneNode(true);
@@ -1039,7 +1050,7 @@ const showNoteDetails = (noteId) => {
     deleteBtn.parentNode.replaceChild(newDeleteBtn, deleteBtn);
     newDeleteBtn.addEventListener('click', () => deleteAuditorNote(noteId));
 
-    closeBtn.onclick = () => modal.classList.add('hidden');
+    closeBtn.addEventListener('click', () => modal.classList.add('hidden')); 
     modal.classList.remove('hidden');
 };
 
@@ -1067,6 +1078,7 @@ const deleteAuditorNote = (noteId) => {
 
 // 5. PUNTO DE ENTRADA
 document.addEventListener('DOMContentLoaded', () => {
+    installActionDelegation();
     landingView = document.getElementById('landing-view');
     mainAppView = document.getElementById('main-app-view');
     landingRunAnalysisBtn = document.getElementById('landing-run-analysis-button');
@@ -1144,7 +1156,7 @@ if (openNotesButton) {
     if (clearLogBtn) {
         clearLogBtn.addEventListener('click', () => {
             if (logContainer) {
-                logContainer.innerHTML = '';
+                logContainer.replaceChildren();
                 // Remover la clase de nuevo log si existe
                 if (logPanel) {
                     logPanel.classList.remove('new-log');
@@ -1203,7 +1215,7 @@ if (openNotesButton) {
     // Inicializar vistas vacías
     views.forEach(view => {
         if (view.id !== 'iam-view') {
-            view.innerHTML = createInitialEmptyState();
+            setHtml(view, raw(createInitialEmptyState()));
         }
     });
 
@@ -1227,10 +1239,10 @@ window.activateElementSelector = () => {
     // Overlay de instrucciones
     const overlay = document.createElement('div');
     overlay.id = 'selector-overlay';
-    overlay.innerHTML = `
+    setHtml(overlay, html`
         <div class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-[#eb3496] text-white px-4 py-2 rounded-lg shadow-lg z-50">
             Click on any element to capture evidence | Press ESC to cancel
-        </div>`;
+        </div>`);
     document.body.appendChild(overlay);
     
     // Event listeners globales
@@ -1318,7 +1330,7 @@ const extractElementEvidence = (element) => {
         subSection: activeTab,
         elementType: 'Unknown Element',
         data: {},
-        rawHTML: element.outerHTML.substring(0, 500) // Backup de HTML
+        rawHTML: element.outerHTML.substring(0, 500) // Backup of captured markup
     };
     
     // Detectar automáticamente el tipo de elemento

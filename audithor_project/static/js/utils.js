@@ -3,17 +3,19 @@
  * Contiene funciones de ayuda y utilidades reutilizables en toda la aplicación.
  */
         
+import { html, setHtml, raw } from './safe_html.js';
+
 export const copyToClipboard = (element, textToCopy) => {
     navigator.clipboard.writeText(textToCopy).then(() => {
-        const originalContent = element.innerHTML;
-        element.innerHTML = `
+        const originalContent = element.cloneNode(true);
+        setHtml(element, raw(`
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check-lg w-4 h-4 text-green-500" viewBox="0 0 16 16">
                 <path d="M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.4-6.425z"/>
             </svg>
-            <span class="text-green-500 text-xs font-bold">Copied</span>`;
+            <span class="text-green-500 text-xs font-bold">Copied</span>`));
         setTimeout(() => {
-            element.innerHTML = originalContent;
-        }, 1500); // Vuelve al estado original después de 1.5 segundos
+            element.replaceChildren(...originalContent.childNodes);
+        }, 1500); // Restore the original contents after 1.5 seconds
     }).catch(err => {
         console.error('Error al copiar el ARN: ', err);
         log('Error copying ARN.', 'error');
@@ -27,11 +29,16 @@ export const log = (message, type = 'info') => {
     if (!logContainer) return;
 
     const timestamp = new Date().toLocaleTimeString();
-    const typeClass = `log-${type}`;
-    const typeText = type.toUpperCase();
+    const allowedTypes = new Set(['info', 'success', 'warning', 'error']);
+    const safeType = allowedTypes.has(type) ? type : 'info';
+    const typeClass = `log-${safeType}`;
+    const typeText = safeType.toUpperCase();
     const entry = document.createElement('p');
     entry.className = 'log-entry';
-    entry.innerHTML = `<span class="font-bold ${typeClass}">[${timestamp} - ${typeText}]</span> ${message}`;
+    const label = document.createElement('span');
+    label.className = `font-bold ${typeClass}`;
+    label.textContent = `[${timestamp} - ${typeText}]`;
+    entry.append(label, document.createTextNode(` ${message}`));
     logContainer.prepend(entry);
 
     // NUEVO: Efecto de pulso cuando hay nuevos logs y el panel está flotante
@@ -46,19 +53,19 @@ export const log = (message, type = 'info') => {
 
 export const createStatusBadge = (statusText) => { 
     if (!statusText) { 
-        return `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">N/A</span>`; 
+        return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">N/A</span>`; 
     } 
     const lowerStatus = statusText.toLowerCase(); 
     if (lowerStatus === 'Enabled' || lowerStatus === 'enabled' || lowerStatus === 'running' || lowerStatus === 'active') { 
-        return `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">${statusText}</span>`; 
+        return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">${statusText}</span>`; 
     } 
     if (lowerStatus === 'Disabled' || lowerStatus === 'suspendido' || lowerStatus.includes('error') || lowerStatus === 'not_available' || lowerStatus === 'stopped' || lowerStatus === 'terminated' || lowerStatus === 'shutting-down' || lowerStatus === 'failed') { 
-        return `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">${statusText}</span>`; 
+        return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">${statusText}</span>`; 
     } 
     if (lowerStatus === 'pending' || lowerStatus === 'enabling' || lowerStatus === 'stopping') { 
-        return `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">${statusText}</span>`; 
+        return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">${statusText}</span>`; 
     } 
-    return `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">${statusText}</span>`; 
+    return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">${statusText}</span>`; 
 };
 
 export const handleTabClick = (navElement, contentSelector) => (e) => { 
@@ -77,16 +84,16 @@ export const handleTabClick = (navElement, contentSelector) => (e) => {
 };
         
 export const createAlarmStateBadge = (state) => { 
-    if (state === 'ALARM') return `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">${state}</span>`; 
-    if (state === 'OK') return `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">${state}</span>`; 
-    return `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">${state}</span>`; 
+    if (state === 'ALARM') return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">${state}</span>`; 
+    if (state === 'OK') return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">${state}</span>`; 
+    return html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">${state}</span>`; 
 };
 
 export const renderSecurityHubFindings = (findings, containerId, emptyMessage) => { 
     const container = document.getElementById(containerId); 
     if (!container) return; 
     if (!findings || findings.length === 0) { 
-        container.innerHTML = `<p class="text-center text-gray-500 py-4">${emptyMessage}</p>`; 
+        setHtml(container, html`<p class="text-center text-gray-500 py-4">${emptyMessage}</p>`); 
         return; 
     } 
     const severityClasses = { 
@@ -96,17 +103,12 @@ export const renderSecurityHubFindings = (findings, containerId, emptyMessage) =
         'LOW': 'bg-blue-500 text-white', 
         'INFORMATIONAL': 'bg-gray-400 text-white' 
     }; 
-    let tableHtml = '<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Severity</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Resource Type</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">'; 
-    findings.forEach(f => { 
-        const severity = f.Severity?.Label || 'N/A'; 
-        const severityClass = severityClasses[severity] || 'bg-gray-200 text-gray-800'; 
-        const region = f.Region || 'N/A'; 
-        const title = f.Title || 'Sin título'; 
-        const resourceType = f.Resources?.[0]?.Type || 'N/A'; 
-        tableHtml += `<tr class="hover:bg-gray-50"><td class="px-4 py-2 whitespace-nowrap"><span class="px-2.5 py-0.5 text-xs font-semibold rounded-full ${severityClass}">${severity}</span></td><td class="px-4 py-2 whitespace-nowrap text-sm text-gray-600">${region}</td><td class="px-4 py-2 text-sm text-gray-800 break-words">${title}</td><td class="px-4 py-2 whitespace-nowrap text-sm text-gray-600">${resourceType}</td></tr>`; 
-    }); 
-    tableHtml += '</tbody></table>'; 
-    container.innerHTML = tableHtml; 
+    const rows = findings.map(f => {
+        const severity = f.Severity?.Label || 'N/A';
+        const severityClass = severityClasses[severity] || 'bg-gray-200 text-gray-800';
+        return html`<tr class="hover:bg-gray-50"><td class="px-4 py-2 whitespace-nowrap"><span class="px-2.5 py-0.5 text-xs font-semibold rounded-full ${raw(severityClass)}">${severity}</span></td><td class="px-4 py-2 whitespace-nowrap text-sm text-gray-600">${f.Region || 'N/A'}</td><td class="px-4 py-2 text-sm text-gray-800 break-words">${f.Title || 'Sin título'}</td><td class="px-4 py-2 whitespace-nowrap text-sm text-gray-600">${f.Resources?.[0]?.Type || 'N/A'}</td></tr>`;
+    });
+    setHtml(container, html`<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Severity</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Resource Type</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${rows}</tbody></table>`); 
 };
 
 export const setupModalControls = () => {
@@ -135,7 +137,7 @@ export const setupPagination = (paginationContainer, ulContainer, items, renderP
     let currentPage = 1;
 
     const updatePaginationButtons = () => {
-        paginationContainer.innerHTML = '';
+        paginationContainer.replaceChildren();
         
         // Botón "Anterior"
         const prevButton = document.createElement('button');
@@ -214,7 +216,7 @@ export const setupPaginationNew = (config) => {
     };
 
     const updatePaginationButtons = () => {
-        paginationContainer.innerHTML = '';
+        paginationContainer.replaceChildren();
         
         if (pageCount <= 1) return;
         
@@ -235,13 +237,13 @@ export const setupPaginationNew = (config) => {
         prevBtn.textContent = 'Previous';
         prevBtn.className = `px-3 py-1 text-sm border rounded ${currentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`;
         prevBtn.disabled = currentPage === 1;
-        prevBtn.onclick = () => {
+        prevBtn.addEventListener('click', () => {
             if (currentPage > 1) {
                 currentPage--;
                 showPage(currentPage);
                 updatePaginationButtons();
             }
-        };
+        });
         
         // Número de página actual
         const pageNum = document.createElement('span');
@@ -253,13 +255,13 @@ export const setupPaginationNew = (config) => {
         nextBtn.textContent = 'Next';
         nextBtn.className = `px-3 py-1 text-sm border rounded ${currentPage === pageCount ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`;
         nextBtn.disabled = currentPage === pageCount;
-        nextBtn.onclick = () => {
+        nextBtn.addEventListener('click', () => {
             if (currentPage < pageCount) {
                 currentPage++;
                 showPage(currentPage);
                 updatePaginationButtons();
             }
-        };
+        });
         
         nav.appendChild(prevBtn);
         nav.appendChild(pageNum);
