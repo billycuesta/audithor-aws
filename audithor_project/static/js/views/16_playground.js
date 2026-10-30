@@ -27,7 +27,6 @@ export const buildPlaygroundView = () => {
         <div class="border-b border-gray-200 mb-6">
             <nav class="-mb-px flex flex-wrap space-x-6" id="playground-tabs">
                 <a href="#" data-tab="pg-tracer-content" class="tab-link py-3 px-1 border-b-2 border-[#eb3496] text-[#eb3496] font-semibold text-sm">Traceroute</a>
-                <a href="#" data-tab="pg-sslscan-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">SSL Scan</a>
                 <a href="#" data-tab="pg-simulate-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Simulate Policy</a>
                 <a href="#" data-tab="pg-lambda-simulate-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Lambda Simulation</a>
             </nav>
@@ -57,26 +56,6 @@ export const buildPlaygroundView = () => {
                 </button>
             </div>
             <div id="playground-results-container" class="mt-6"></div>
-        </div>
-        <div id="pg-sslscan-content" class="playground-tab-content hidden">
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 class="font-bold text-lg mb-3 text-[#204071]">SSL/TLS Security Scanner</h3>
-                <div class="bg-gray-50 border border-gray-200 rounded p-3 mb-4">
-                    <h4 class="text-sm font-medium text-gray-700 mb-1">What this tool does:</h4>
-                    <p class="text-sm text-gray-600 mb-2">Performs comprehensive SSL/TLS analysis including cipher suites, certificate validation, protocol versions, and security vulnerabilities.</p>
-                    <h4 class="text-sm font-medium text-gray-700 mb-1">Security considerations:</h4>
-                    <p class="text-sm text-gray-600">Identify weak ciphers, expired certificates, unsupported protocols, and other SSL/TLS misconfigurations that could expose sensitive data.</p>
-                </div>
-                <div>
-                    <label for="pg-sslscan-target" class="block text-sm font-medium text-gray-700 mb-1">Domain(s) or IP(s)</label>
-                    <input type="text" id="pg-sslscan-target" class="bg-gray-50 border border-gray-300 text-[#204071] text-sm rounded-lg focus:ring-[#eb3496] focus:border-[#eb3496] block w-full p-2.5 font-mono" placeholder="e.g.: google.com, github.com, 1.1.1.1">
-                </div>
-                <button id="pg-run-sslscan-btn" class="bg-[#204071] text-white px-4 py-2.5 rounded-lg font-bold text-md hover:bg-[#1a335a] transition flex items-center justify-center space-x-2 mt-4">
-                    <span id="pg-sslscan-btn-text">Scan SSL/TLS</span>
-                    <div id="pg-sslscan-spinner" class="spinner hidden"></div>
-                </button>
-            </div>
-            <div id="sslscan-results-container" class="mt-6"></div>
         </div>
         <div id="pg-simulate-content" class="playground-tab-content hidden">
             <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -221,9 +200,6 @@ export const buildPlaygroundView = () => {
     const runAnalysisBtn = document.getElementById('pg-run-analysis-btn');
     if (runAnalysisBtn) runAnalysisBtn.addEventListener('click', runPlaygroundAnalysis);
 
-    const runSslScanBtn = document.getElementById('pg-run-sslscan-btn');
-    if (runSslScanBtn) runSslScanBtn.addEventListener('click', runSslScan);
-
     const runSimulationBtn = document.getElementById('pg-run-simulation-btn');
     if (runSimulationBtn) runSimulationBtn.addEventListener('click', runSimulation);
 
@@ -233,9 +209,6 @@ export const buildPlaygroundView = () => {
 
     if (window.playgroundApiData?.results) {
         renderPlaygroundResults();
-    }
-    if (window.playgroundApiData?.sslscan) {
-        renderSslScanResults(window.playgroundApiData.sslscan);
     }
 };
 
@@ -356,88 +329,6 @@ const renderPlaygroundResults = () => {
     }
 
     setHtml(container, join(parts));
-};
-
-const renderSslScanResults = (results) => {
-    const resultsContainer = document.getElementById('sslscan-results-container');
-    if (!results || results.length === 0) {
-        setHtml(resultsContainer, html``);
-        return;
-    }
-
-    const resultsHtml = results.map(result => {
-        let resultOutput;
-        if (result.error) {
-            resultOutput = html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Error</h4><p>${result.error}</p></div>`;
-        } else if (result.output && result.output.trim() !== '') {
-            resultOutput = html`<pre class="bg-gray-900 text-white p-4 rounded-lg text-xs font-mono overflow-x-auto">${result.output}</pre>`;
-        } else {
-            resultOutput = html`<div class="bg-yellow-50 text-yellow-700 p-4 rounded-lg"><h4 class="font-bold">Warning</h4><p>The scan finished without returning results for this target.</p></div>`;
-        }
-
-        return html`
-            <div class="mb-6">
-                <h4 class="font-bold text-lg mb-2 text-[#204071]">Result for: ${result.target}</h4>
-                ${resultOutput}
-            </div>
-        `;
-    });
-    setHtml(resultsContainer, join(resultsHtml));
-};
-
-const runSslScan = async () => {
-    const targetInput = document.getElementById('pg-sslscan-target');
-    const resultsContainer = document.getElementById('sslscan-results-container');
-    const runBtn = document.getElementById('pg-run-sslscan-btn');
-    const btnText = document.getElementById('pg-sslscan-btn-text');
-    const spinner = document.getElementById('pg-sslscan-spinner');
-    const target = targetInput.value.trim();
-    
-    if (!target) {
-        setHtml(resultsContainer, html`<p class="text-red-600 font-medium">Please enter one or more comma-separated domains/IPs.</p>`);
-        return;
-    }
-
-    log(`Starting sslscan for: ${target}...`, 'info');
-    setHtml(resultsContainer, html``);
-    runBtn.disabled = true;
-    spinner.classList.remove('hidden');
-    btnText.textContent = 'Scanning...';
-
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
-
-        const sslscanEndpoint = window.API?.RUN_SSLSCAN || '/api/run-sslscan';
-        const response = await fetch(sslscanEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target: target }),
-            signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-        const data = await response.json();
-        if (!response.ok && data.error) {
-            throw new Error(data.error);
-        }
-        if (!window.playgroundApiData) window.playgroundApiData = {};
-        window.playgroundApiData.sslscan = data.results;
-        renderSslScanResults(data.results);
-        log(`sslscan completed for: ${target}.`, 'success');
-            } catch (e) {
-        if (e.name === 'AbortError') {
-            log('SSL scan timed out after 2 minutes.', 'error');
-            setHtml(resultsContainer, html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Timeout Error</h4><p>The SSL scan took too long to complete. This may be due to network connectivity issues or unresponsive targets.</p></div>`);
-        } else {
-            log(`sslscan error: ${e.message}`, 'error');
-            setHtml(resultsContainer, html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Error</h4><p>${e.message}</p></div>`);
-        }
-    } finally {
-        runBtn.disabled = false;
-        spinner.classList.add('hidden');
-        btnText.textContent = 'Scan SSL/TLS';
-    }
 };
 
 const runSimulation = async () => {

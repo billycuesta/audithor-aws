@@ -24,7 +24,7 @@ def test_dashboard_has_expected_csp_and_security_headers():
 
 
 def test_api_json_does_not_receive_csp():
-    response = make_client(audithor_app.app).post('/api/run-sslscan', json={})
+    response = make_client(audithor_app.app).post('/api/run-kms-audit', json={})
     assert response.is_json
     assert "Content-Security-Policy" not in response.headers
 

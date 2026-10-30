@@ -1,12 +1,5 @@
 import ipaddress
-import shutil
 import socket
-import subprocess
-import threading
-import re
-import ipaddress
-import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, as_completed
 from collections import defaultdict
 
 import boto3
@@ -535,103 +528,6 @@ def analyze_network_path_data(session, source_arn, target_arn):
                 
     del result['perms']
     return result
-
-
-def run_sslscan_on_targets(targets_str, deadline_seconds=130):
-    """
-    Executes sslscan on a list of targets and returns the results.
-
-    Args:
-        targets_str (str): A comma-separated string of targets (e.g., 'google.com,example.com:443').
-
-    Returns:
-        list: A list of dictionaries, each containing the result for one target.
-
-    Example:
-        >>> results = run_sslscan_on_targets('example.com')
-        >>> print(results[0]['output'])
-    """
-    if not isinstance(targets_str, str):
-        raise ValueError("Targets must be a string.")
-    if len(targets_str) > 2048:
-        raise ValueError("Targets must be no longer than 2048 characters.")
-    targets = list(dict.fromkeys(t.strip() for t in targets_str.split(',') if t.strip()))
-    if len(targets) > 10:
-        raise ValueError("No more than 10 targets are allowed.")
-    results = []
-    hostname_pattern = re.compile(r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*\.?$")
-
-    def valid_target(target):
-        port = None
-        hostname_or_ip = target
-        if target.startswith("["):
-            match = re.fullmatch(r"\[([0-9A-Fa-f:.]+)\](?::([0-9]{1,5}))?", target)
-            if not match:
-                return False
-            try:
-                ipaddress.IPv6Address(match.group(1))
-            except ValueError:
-                return False
-            port = match.group(2)
-        elif target.count(":") >= 2:
-            try:
-                ipaddress.IPv6Address(target)
-            except ValueError:
-                return False
-        else:
-            if ":" in target:
-                hostname_or_ip, port = target.rsplit(":", 1)
-                if not port.isdigit() or len(port) > 5:
-                    return False
-            if hostname_or_ip.count(".") and all(part.isdigit() for part in hostname_or_ip.split(".")):
-                try:
-                    ipaddress.IPv4Address(hostname_or_ip)
-                except ValueError:
-                    return False
-            elif not hostname_pattern.fullmatch(hostname_or_ip):
-                return False
-        return port is None or 1 <= int(port) <= 65535
-
-    valid = [target for target in targets if valid_target(target)]
-    results.extend({"target": target, "error": "Target is not a valid hostname or IP address with an optional port."} for target in targets if target not in valid)
-    if not valid:
-        return results
-    if not shutil.which("sslscan"):
-        return results + [{"target": target, "error": "The 'sslscan' command was not found in your system PATH."} for target in valid]
-
-    deadline = time.monotonic() + deadline_seconds
-    def scan_target(target):
-        try:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                return {"target": target, "error": "Overall scan deadline exceeded."}
-            result = subprocess.run(['sslscan', '--no-colour', target], capture_output=True, text=True, timeout=min(120, remaining), check=False)
-            if not result.stdout and not result.stderr:
-                return {"target": target, "error": "Command executed but returned no output."}
-            return {"target": target, "output": result.stdout + result.stderr}
-        except subprocess.TimeoutExpired:
-            return {"target": target, "error": "Scan exceeded its timeout."}
-        except Exception:
-            return {"target": target, "error": "An unexpected error occurred."}
-
-    executor = ThreadPoolExecutor(max_workers=4)
-    futures = {executor.submit(scan_target, target): target for target in valid}
-    completed = {}
-    try:
-        for future in as_completed(futures, timeout=deadline_seconds):
-            target = futures[future]
-            try:
-                completed[target] = future.result()
-            except Exception:
-                completed[target] = {"target": target, "error": "An unexpected error occurred."}
-    except (TimeoutError, FutureTimeoutError):
-        for future, target in futures.items():
-            if not future.done():
-                future.cancel()
-                completed[target] = {"target": target, "error": "Overall scan deadline exceeded."}
-    finally:
-        executor.shutdown(wait=False, cancel_futures=True)
-    return results + [completed[target] for target in valid]
 
 
 def simulate_user_permissions(session, username, actions, context_entries=None):

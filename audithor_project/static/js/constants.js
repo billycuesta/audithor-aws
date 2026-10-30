@@ -63,7 +63,6 @@ const API = {
   RUN_NETWORK_DETAIL:      `${BASE}/api/run-network-detail-audit`,
   RUN_CLOUDTRAIL_LOOKUP:   `${BASE}/api/run-cloudtrail-lookup`,
   RUN_PLAYGROUND:          `${BASE}/api/run-playground-audit`,
-  RUN_SSLSCAN:             `${BASE}/api/run-sslscan`,
   RUN_SIMULATE_POLICY:     `${BASE}/api/run-simulate-policy`,
   RUN_SIMULATE_LAMBDA:     `${BASE}/api/run-simulate-lambda-policy`,
   RUN_S3_SECURITY_CHECK:   `${BASE}/api/run-s3-security-check`,

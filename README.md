@@ -34,6 +34,9 @@ AudiThor is a local web app for read-only AWS security audits. It provides a sin
 - Config + Security Hub deep-dive and status checks.
 - Inventory summary module.
 
+### Playground
+The Playground offers path analysis and permission simulation.
+
 ### Auditor productivity
 - In-scope tagging with mandatory reason.
 - Auditor Notes view with:
@@ -49,9 +52,6 @@ AudiThor is a local web app for read-only AWS security audits. It provides a sin
 ## Prerequisites
 
 1. Python 3.8+ and `pip`.
-2. `sslscan` (for Playground SSL checks).
-   - macOS (Homebrew): `brew install sslscan`
-   - Debian/Ubuntu: `sudo apt-get install sslscan`
 
 ## Installation
 
@@ -97,9 +97,6 @@ Best practices:
 - Host and Origin allowlists are checked to mitigate DNS rebinding and cross-site requests. CORS permits loopback origins on the configured port.
 - If `AUDITHOR_HOST` is non-loopback, the Host check accepts that exact host and port (along with the two loopback hostnames). Use the exact address clients will enter; never use `0.0.0.0`.
 - API and `/run_` POST requests require `application/json`. Request bodies are limited to 64 MiB.
-
-### SSL scanner
-`POST /api/run-sslscan` accepts at most 10 targets and 2048 characters. Targets must be hostnames, IPv4 or IPv6 addresses, with an optional port. The scanner uses up to four parallel workers with a 130-second overall deadline and requires the `sslscan` binary on the operator's machine. It scans the targets entered by the operator; use it only on systems you are authorized to test.
 
 ### Errors, logs, and browser protections
 - API error responses use generic messages and a category. Structured server logs record diagnostic categories and exception types (and selected request identifiers), not exception text.

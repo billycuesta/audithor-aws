@@ -1,8 +1,25 @@
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 import pytest
 import audithor_app
 from conftest import make_client
+from audithor_project.collectors import playground
+
+
+def test_sslscan_removal_contract(client, monkeypatch):
+    assert client.post('/api/run-sslscan', json={}).status_code == 404
+    assert not hasattr(playground, 'run_sslscan_on_targets')
+
+    source_paths = (
+        Path(audithor_app.__file__),
+        Path(playground.__file__),
+    )
+    assert all("sslscan" not in path.read_text().lower() for path in source_paths)
+
+    import shutil
+    monkeypatch.setattr(shutil, "which", lambda command: (_ for _ in ()).throw(AssertionError(command)))
+    assert client.post('/api/run-sslscan', json={}).status_code == 404
 
 
 @pytest.fixture

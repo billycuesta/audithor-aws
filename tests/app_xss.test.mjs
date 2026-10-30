@@ -25,4 +25,13 @@ assert.equal(validators.isValidScopeData({ arn: { comment: 'in scope' } }), true
 assert.equal(validators.isImportFileSizeAllowed(200 * 1024 * 1024 + 1), false);
 assert.equal(validators.isImportFileSizeAllowed(200 * 1024 * 1024), true);
 assert.equal(validators.validateImportShape({ metadata: {}, results: {} }), true);
+const playgroundHelper = source.match(/export const playgroundStateFromImport = .*?;/s)?.[0];
+assert.ok(playgroundHelper);
+const playgroundState = new Function(`${playgroundHelper.replace('export const', 'const')}\nreturn playgroundStateFromImport;`)();
+assert.deepEqual(playgroundState({ traceroute: { hops: [] }, sslscan: ['legacy'] }), { results: { hops: [] } });
+assert.deepEqual(playgroundState({ traceroute: { hops: [] } }), { results: { hops: [] } });
+assert.deepEqual(playgroundState(undefined), { results: null });
+const exportBuilder = source.match(/const exportResultsToJson = \(\) => \{.*?\n\};/s)?.[0];
+assert.ok(exportBuilder);
+assert.equal(exportBuilder.includes('sslscan'), false);
 console.log('app xss tests passed');

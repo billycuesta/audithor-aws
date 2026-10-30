@@ -134,6 +134,7 @@ export const isPlainObject = value => value !== null && typeof value === 'object
 export const isValidScopeData = value => isPlainObject(value) && Object.values(value).every(entry => isPlainObject(entry));
 export const isImportFileSizeAllowed = size => Number.isFinite(size) && size <= 200 * 1024 * 1024;
 export const validateImportShape = data => isPlainObject(data) && isPlainObject(data.metadata) && isPlainObject(data.results);
+export const playgroundStateFromImport = playground => ({ results: playground?.traceroute || null });
 
 const loadScopedResources = () => {
     const stored = localStorage.getItem(SCOPE_STORAGE_KEY);
@@ -828,8 +829,7 @@ const exportResultsToJson = () => {
             kms: window.kmsApiData?.results || null,
             secretsManager: window.secretsManagerApiData?.results || null,
             playground: {
-                traceroute: window.playgroundApiData?.results || null,
-                sslscan: window.playgroundApiData?.sslscan || null
+                traceroute: window.playgroundApiData?.results || null
             },
             connectivity: window.connectivityApiData?.results || null,
             codepipeline: window.codepipelineApiData?.results || null,
@@ -914,8 +914,7 @@ const handleJsonImport = (event) => {
             const playgroundImportData = results.playground || {};
             window.playgroundApiData = {
                 metadata: metadata,
-                results: playgroundImportData.traceroute || null,
-                sslscan: playgroundImportData.sslscan || null
+                ...playgroundStateFromImport(playgroundImportData)
             };
             
             window.allAvailableRegions = window.networkPoliciesApiData?.results?.all_regions || [];

@@ -11,8 +11,6 @@ import webbrowser
 from datetime import datetime, timedelta
 import pytz
 import json
-import subprocess
-import shutil
 import boto3
 import uuid
 import logging
@@ -440,18 +438,6 @@ def run_kms_audit():
         return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": kms_results })
     except Exception as e:
         return _error_response(e, "Unexpected error while collecting KMS data:", 500)
-
-@app.route('/api/run-sslscan', methods=['POST'])
-def run_sslscan():
-    data = request.get_json()
-    targets_str = data.get('target') if isinstance(data, dict) else None
-    if not targets_str:
-        return jsonify({"error": "No target has been provided."}), 400
-    try:
-        results = playground.run_sslscan_on_targets(targets_str)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
-    return jsonify({"results": results})
 
 @app.route('/run_executive_summary', methods=['POST'])
 def run_executive_summary():
