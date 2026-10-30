@@ -21,7 +21,7 @@ const ICONS = {
 function normalizeBase(raw) {
   if (!raw) return '';
   let v = raw.trim();
-  if (v.startsWith('/')) v = window.location.origin.replace(/\/$/, '') + v;
+  if (v.startsWith('/')) return v;
   if (v.startsWith('//')) v = window.location.protocol + v;
   return v.replace(/\/+$/, '');
 }
@@ -31,7 +31,7 @@ function resolveBackendBase() {
   if (meta) return normalizeBase(meta);
   const dataAttr = document.body?.dataset?.backendBase;
   if (dataAttr) return normalizeBase(dataAttr);
-  return normalizeBase(window.location.origin);
+  return '';
 }
 const BASE = resolveBackendBase();
 

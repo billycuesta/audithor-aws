@@ -514,27 +514,27 @@ const runAnalysisFromInputs = async (source = 'main') => {
         window.activeScanId = crypto.randomUUID();
         const scanHeaders = { 'Content-Type': 'application/json', 'X-Scan-Id': window.activeScanId };
         const apiCalls = {
-            iam: fetch('http://127.0.0.1:5001/api/run-iam-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            accessAnalyzer: fetch('http://127.0.0.1:5001/api/run-access-analyzer-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            securityhub: fetch('http://127.0.0.1:5001/api/run-securityhub-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            exposure: fetch('http://127.0.0.1:5001/api/run-exposure-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            guardduty: fetch('http://127.0.0.1:5001/api/run-guardduty-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            waf: fetch('http://127.0.0.1:5001/api/run-waf-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            cloudtrail: fetch('http://127.0.0.1:5001/api/run-cloudtrail-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            cloudwatch: fetch('http://127.0.0.1:5001/api/run-cloudwatch-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            inspector: fetch('http://127.0.0.1:5001/api/run-inspector-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            acm: fetch('http://127.0.0.1:5001/api/run-acm-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            compute: fetch('http://127.0.0.1:5001/api/run-compute-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            ecr: fetch('http://127.0.0.1:5001/api/run-ecr-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            databases: fetch('http://127.0.0.1:5001/api/run-databases-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            network_policies: fetch('http://127.0.0.1:5001/api/run-network-policies-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            federation: fetch('http://127.0.0.1:5001/api/run-federation-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            config_sh_status: fetch('http://127.0.0.1:5001/api/run-config-sh-status-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            kms: fetch('http://127.0.0.1:5001/api/run-kms-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            secrets_manager: fetch('http://127.0.0.1:5001/api/run-secrets-manager-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            connectivity: fetch('http://127.0.0.1:5001/api/run-connectivity-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            codepipeline: fetch('http://127.0.0.1:5001/api/run-codepipeline-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            inventory: fetch('http://127.0.0.1:5001/api/run-inventory-audit', { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) })
+            iam: fetch(window.CONSTANTS.API.RUNS['/api/run-iam-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            accessAnalyzer: fetch(window.CONSTANTS.API.RUNS['/api/run-access-analyzer-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            securityhub: fetch(window.CONSTANTS.API.RUNS['/api/run-securityhub-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            exposure: fetch(window.CONSTANTS.API.RUNS['/api/run-exposure-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            guardduty: fetch(window.CONSTANTS.API.RUNS['/api/run-guardduty-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            waf: fetch(window.CONSTANTS.API.RUNS['/api/run-waf-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            cloudtrail: fetch(window.CONSTANTS.API.RUNS['/api/run-cloudtrail-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            cloudwatch: fetch(window.CONSTANTS.API.RUNS['/api/run-cloudwatch-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            inspector: fetch(window.CONSTANTS.API.RUNS['/api/run-inspector-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            acm: fetch(window.CONSTANTS.API.RUNS['/api/run-acm-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            compute: fetch(window.CONSTANTS.API.RUNS['/api/run-compute-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            ecr: fetch(window.CONSTANTS.API.RUNS['/api/run-ecr-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            databases: fetch(window.CONSTANTS.API.RUNS['/api/run-databases-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            network_policies: fetch(window.CONSTANTS.API.RUNS['/api/run-network-policies-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            federation: fetch(window.CONSTANTS.API.RUNS['/api/run-federation-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            config_sh_status: fetch(window.CONSTANTS.API.RUNS['/api/run-config-sh-status-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            kms: fetch(window.CONSTANTS.API.RUNS['/api/run-kms-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            secrets_manager: fetch(window.CONSTANTS.API.RUNS['/api/run-secrets-manager-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            connectivity: fetch(window.CONSTANTS.API.RUNS['/api/run-connectivity-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            codepipeline: fetch(window.CONSTANTS.API.RUNS['/api/run-codepipeline-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            inventory: fetch(window.CONSTANTS.API.RUNS['/api/run-inventory-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) })
         };
 
         const totalTests = Object.keys(apiCalls).length;

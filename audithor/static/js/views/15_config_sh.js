@@ -206,7 +206,7 @@ async function runDeepConfigSHAnalysis() {
     };
 
     try {
-        const deepConfigEndpoint = window.CONSTANTS?.API?.RUN_CONFIG_SH || `${window.location.origin}/api/run-config-sh-audit`;
+        const deepConfigEndpoint = window.CONSTANTS?.API?.RUN_CONFIG_SH || '/api/run-config-sh-audit';
         const response = await fetch(deepConfigEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

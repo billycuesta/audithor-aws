@@ -103,7 +103,7 @@ const runDeepInspectorAnalysis = async () => {
 
     try {
         // --- CORRECCIÓN AQUÍ ---
-        const inspectorFindingsEndpoint = window.CONSTANTS?.API?.RUN_INSPECTOR_FINDINGS || `${window.location.origin}/api/run-inspector-findings-audit`;
+        const inspectorFindingsEndpoint = window.CONSTANTS?.API?.RUN_INSPECTOR_FINDINGS || '/api/run-inspector-findings-audit';
         const response = await fetch(inspectorFindingsEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...(window.activeScanId ? { 'X-Scan-Id': window.activeScanId } : {}) },
