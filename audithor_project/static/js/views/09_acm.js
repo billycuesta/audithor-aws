@@ -6,6 +6,7 @@ import { renderCollectionNotice, emptyCollectionMessage, coverageIsComplete } fr
 
 // --- IMPORTS ---
 import { handleTabClick, renderSecurityHubFindings } from '../utils.js';
+import { html, join, setHtml, act, raw } from '../safe_html.js';
 
 // --- SERVICE DESCRIPTIONS ---
 const serviceDescriptions = {
@@ -40,7 +41,7 @@ export const buildAcmView = () => {
     const { certificates } = window.acmApiData.results;
     const acmSecurityHubFindings = (window.securityHubApiData?.results?.findings?.cloudwatchFindings || []).filter(f => f.Title.includes('Certificate') || f.Title.includes('SSL') || f.Title.includes('TLS'));
 
-    container.innerHTML = `
+    setHtml(container, html`
         <header class="flex justify-between items-center mb-6">
             <div>
                 <h2 class="text-2xl font-bold text-[#204071]">AWS Certificate Manager (ACM)</h2>
@@ -73,7 +74,7 @@ export const buildAcmView = () => {
             </div>
             <div id="acm-sh-content" class="acm-tab-content hidden">${createAcmSecurityHubHtml()}</div>
         </div>
-    `;
+    `);
     renderCollectionNotice(container, window.acmApiData);
     
     updateAcmSummaryCards(certificates, acmSecurityHubFindings);
@@ -107,7 +108,7 @@ export const buildAcmView = () => {
 
 // --- SERVICE DESCRIPTION RENDERER ---
 const renderServiceDescription = (serviceInfo) => {
-    return `
+    return html`
         <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
             <h3 class="text-lg font-semibold text-gray-800 mb-3">${serviceInfo.title}</h3>
             <div class="space-y-3">
@@ -130,7 +131,7 @@ const renderServiceDescription = (serviceInfo) => {
 
 // --- INTERNAL MODULE FUNCTIONS (NOT EXPORTED) ---
 
-const createAcmSummaryCardsHtml = () => `
+const createAcmSummaryCardsHtml = () => html`
     <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-5 mb-8">
         <div class="bg-white border border-gray-100 p-5 rounded-xl shadow-sm flex flex-col justify-between h-full"><div><p class="text-sm text-gray-500">Total Certificates</p></div><div class="flex justify-between items-end pt-4"><p id="acm-total-certs" class="text-3xl font-bold text-[#204071]">--</p><div class="bg-blue-100 p-3 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-card-heading w-6 h-6 text-blue-600" viewBox="0 0 16 16">  <path d="M14.5 3a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-13a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5zm-13-1A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2z"/>  <path d="M3 8.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5m0-5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5z"/></svg></div></div></div>
         <div class="bg-white border border-gray-100 p-5 rounded-xl shadow-sm flex flex-col justify-between h-full"><div><p class="text-sm text-gray-500">Issued Certificates</p></div><div class="flex justify-between items-end pt-4"><p id="acm-issued-certs" class="text-3xl font-bold text-green-600">--</p><div class="bg-green-100 p-3 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-patch-check w-6 h-6 text-green-600" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M10.354 6.146a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 1 1 .708-.708L7 8.793l2.646-2.647a.5.5 0 0 1 .708 0z"/><path d="m10.273 2.513-.921-.944.715-.698.622.637.89-.011a2.89 2.89 0 0 1 2.924 2.924l-.01.89.636.622a2.89 2.89 0 0 1 0 4.134l-.637.622.011.89a2.89 2.89 0 0 1-2.924 2.924l-.89-.01-.622.636a2.89 2.89 0 0 1-4.134 0l-.622-.637-.89.01a2.89 2.89 0 0 1-2.924-2.924l.01-.89-.636-.622a2.89 2.89 0 0 1 0-4.134l.637-.622-.011-.89a2.89 2.89 0 0 1 2.924-2.924l.89.01.622-.636a2.89 2.89 0 0 1 4.134 0l-.715.698a1.89 1.89 0 0 0-2.704 0l-.92.944-1.32-.016a1.89 1.89 0 0 0-1.911 1.912l.016 1.318-.944.921a1.89 1.89 0 0 0 0 2.704l.944.92-.016 1.32a1.89 1.89 0 0 0 1.912 1.911l1.318-.016.921.944a1.89 1.89 0 0 0 2.704 0l.92-.944 1.32.016a1.89 1.89 0 0 0 1.911-1.912l-.016-1.318.944-.921a1.89 1.89 0 0 0 0-2.704l-.944-.92.016-1.32a1.89 1.89 0 0 0-1.912-1.911z"/></svg></div></div></div>
@@ -147,11 +148,11 @@ const updateAcmSummaryCards = (certificates, securityHubFindings) => {
     document.getElementById('acm-critical-findings').textContent = securityHubFindings.filter(f => f.Severity?.Label === 'CRITICAL' || f.Severity?.Label === 'HIGH').length;
 };
 
-const createAcmSecurityHubHtml = () => `<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><h3 class="font-bold text-lg mb-4 text-[#204071]">Active Security Findings (ACM via SH)</h3><div id="sh-acm-findings-container" class="overflow-x-auto"></div></div>`;
+const createAcmSecurityHubHtml = () => html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><h3 class="font-bold text-lg mb-4 text-[#204071]">Active Security Findings (ACM via SH)</h3><div id="sh-acm-findings-container" class="overflow-x-auto"></div></div>`;
 
 const renderAcmCertificatesTable = (certificates) => {
     if (!certificates || certificates.length === 0) {
-        return `
+        return html`
             <div class="bg-white p-6 rounded-xl border border-gray-100">
                 <div class="text-center">
                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -174,17 +175,7 @@ const renderAcmCertificatesTable = (certificates) => {
         'FAILED': 'bg-red-100 text-red-800',
     };
 
-    let tableHtml = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
-                    '<th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Main Domain</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issued By</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issue Date</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expiration Date</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SANs</th>' +
-                    '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-    
+    const rows = [];
     certificates.forEach(cert => {
         const domainName = cert.DomainName || 'N/A';
         const region = cert.Region || 'N/A';
@@ -202,9 +193,9 @@ const renderAcmCertificatesTable = (certificates) => {
         const scopeIcon = isScoped 
             ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>` 
             : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`;
-        const scopeButton = `<button onclick="openScopeModal('${certArn}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
+        const scopeButton = html`<button ${act('openScopeModal', certArn, encodeURIComponent(scopeComment))} title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${raw(scopeIcon)}</button>`;
 
-        tableHtml += `<tr class="${rowClass}">
+        rows.push(html`<tr class="${rowClass}">
                         <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
                         <td class="px-4 py-4 align-top text-sm font-medium text-gray-800 break-words">${domainName}</td>
                         <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600">${region}</td>
@@ -213,12 +204,12 @@ const renderAcmCertificatesTable = (certificates) => {
                         <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600">${issuedAt}</td>
                         <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600">${expiresAt}</td>
                         <td class="px-4 py-4 align-top text-sm text-gray-600 break-words">${sans}</td>
-                      </tr>`;
+                      </tr>`);
     });
 
-    
-    tableHtml += '</tbody></table></div>';
-    return tableHtml;
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+                    <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Main Domain</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issued By</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issue Date</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expiration Date</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SANs</th>
+                    </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`;
 };
 
 const renderCertificateLifecycleAnalysis = (certificates) => {
@@ -250,7 +241,7 @@ const renderCertificateLifecycleAnalysis = (certificates) => {
         }
     });
 
-    return `
+    return html`
         <div class="space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="bg-white border border-gray-200 rounded-lg p-4">
@@ -402,15 +393,15 @@ const renderLifecycleRecommendations = (certificates, expiringSoon, expiringIn90
         success: '<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>'
     };
     
-    return `
+    return html`
         <div class="bg-white border border-gray-200 rounded-lg p-6">
             <h3 class="text-lg font-semibold text-gray-800 mb-4">Certificate Lifecycle Recommendations</h3>
             <div class="space-y-4">
-                ${recommendations.map(rec => `
+                ${join(recommendations.map(rec => html`
                     <div class="border rounded-lg p-4 ${typeColors[rec.type]}">
                         <div class="flex items-start">
                             <div class="flex-shrink-0 ${typeTextColors[rec.type]} mt-0.5">
-                                ${typeIcons[rec.type]}
+                                ${raw(typeIcons[rec.type])}
                             </div>
                             <div class="ml-3 flex-1">
                                 <h4 class="text-sm font-medium ${typeTextColors[rec.type]}">${rec.title}</h4>
@@ -419,7 +410,7 @@ const renderLifecycleRecommendations = (certificates, expiringSoon, expiringIn90
                             </div>
                         </div>
                     </div>
-                `).join('')}
+                `))}
             </div>
         </div>
     `;

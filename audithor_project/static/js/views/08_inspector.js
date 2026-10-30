@@ -6,6 +6,7 @@ import { renderCollectionNotice, emptyCollectionMessage, coverageIsComplete, mer
 
 // --- IMPORTS ---
 import { handleTabClick, log, createStatusBadge, setupPagination } from '../utils.js';
+import { html, join, setHtml } from '../safe_html.js';
 
 
 // --- MAIN VIEW FUNCTION (EXPORTED) ---
@@ -19,7 +20,7 @@ export const buildInspectorView = () => {
     if (hasFindings) {
         renderFullInspectorView(window.inspectorApiData.results.findings, window.securityHubApiData ? window.securityHubApiData.results.findings.inspectorFindings : []);
     } else {
-        container.innerHTML = `
+        setHtml(container, html`
             <header class="flex justify-between items-center mb-6">
                 <div>
                     <h2 class="text-2xl font-bold text-[#204071]">Inspector</h2>
@@ -48,10 +49,10 @@ export const buildInspectorView = () => {
                 </div>
             </div>
             <div id="inspector-results-view" class="hidden mt-6"></div>
-        `;
+        `);
         renderCollectionNotice(container, window.inspectorApiData);
 
-        document.getElementById('inspector-status-content').innerHTML = renderInspectorStatusTable(scanStatus);
+        setHtml(document.getElementById('inspector-status-content'), renderInspectorStatusTable(scanStatus));
         document.getElementById('run-deep-inspector-scan-btn').addEventListener('click', runDeepInspectorAnalysis);
         const tabsNav = document.getElementById('inspector-tabs-initial');
         if (tabsNav) tabsNav.addEventListener('click', handleTabClick(tabsNav, '.inspector-tab-content'));
@@ -73,7 +74,7 @@ const runDeepInspectorAnalysis = async () => {
     btnText.textContent = 'Searching Findings…';
     if (errorContainer) {
         errorContainer.classList.add('hidden');
-        errorContainer.innerHTML = '';
+        setHtml(errorContainer, html``);
     }
     log('Starting deep search of Inspector findings…', 'info');
 
@@ -85,7 +86,7 @@ const runDeepInspectorAnalysis = async () => {
         const errorMessage = 'Access Key or Secret Key not provided.';
         log(`Error in deep Inspector search: ${errorMessage}`, 'error');
         if (errorContainer) {
-            errorContainer.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-lg mt-4"><h4 class="font-bold">Error</h4><p>${errorMessage}</p></div>`;
+            setHtml(errorContainer, html`<div class="bg-red-50 text-red-700 p-4 rounded-lg mt-4"><h4 class="font-bold">Error</h4><p>${errorMessage}</p></div>`);
             errorContainer.classList.remove('hidden');
         }
         runBtn.disabled = false;
@@ -156,13 +157,13 @@ const runDeepInspectorAnalysis = async () => {
 };
 
 const renderSecurityHubFindingsPage = (tbodyContainer, findings, page, rowsPerPage) => {
-    tbodyContainer.innerHTML = '';
+    setHtml(tbodyContainer, html``);
     const start = (page - 1) * rowsPerPage;
     const end = start + rowsPerPage;
     const paginatedItems = findings.slice(start, end);
 
     const severityClasses = { 'CRITICAL': 'bg-red-600 text-white', 'HIGH': 'bg-orange-500 text-white', 'MEDIUM': 'bg-yellow-400 text-black', 'LOW': 'bg-blue-500 text-white', 'INFORMATIONAL': 'bg-gray-400 text-white' };
-    let pageHtml = '';
+    const pageRows = [];
     
     for (const f of paginatedItems) {
         const severity = f.Severity?.Label || 'N/A';
@@ -170,17 +171,17 @@ const renderSecurityHubFindingsPage = (tbodyContainer, findings, page, rowsPerPa
         const region = f.Region || 'N/A';
         const title = f.Title || 'Untitled';
         const resourceType = f.Resources?.[0]?.Type || 'N/A';
-        pageHtml += `<tr class="hover:bg-gray-50">
+        pageRows.push(html`<tr class="hover:bg-gray-50">
                         <td class="px-4 py-2 whitespace-nowrap"><span class="px-2.5 py-0.5 text-xs font-semibold rounded-full ${severityClass}">${severity}</span></td>
                         <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-600">${region}</td>
                         <td class="px-4 py-2 text-sm text-gray-800 break-words">${title}</td>
                         <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-600">${resourceType}</td>
-                     </tr>`;
+                     </tr>`);
     }
-    tbodyContainer.innerHTML = pageHtml;
+    setHtml(tbodyContainer, join(pageRows));
 };
 
-const createInspectorSummaryCardsHtml = () => `
+const createInspectorSummaryCardsHtml = () => html`
     <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-5 mb-8">
         <div class="bg-white border border-gray-100 p-5 rounded-xl shadow-sm flex flex-col justify-between h-full"><div><p class="text-sm text-gray-500">Active Regions</p></div><div class="flex justify-between items-end pt-4"><p id="inspector-active-regions" class="text-3xl font-bold text-[#204071]">--</p><div class="bg-green-100 p-3 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-geo-alt w-6 h-6 text-green-700" viewBox="0 0 16 16">  <path d="M12.166 8.94c-.524 1.062-1.234 2.12-1.96 3.07A32 32 0 0 1 8 14.58a32 32 0 0 1-2.206-2.57c-.726-.95-1.436-2.008-1.96-3.07C3.304 7.867 3 6.862 3 6a5 5 0 0 1 10 0c0 .862-.305 1.867-.834 2.94M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10"/>  <path d="M8 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4m0 1a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/></svg></div></div></div>
         <div class="bg-white border border-gray-100 p-5 rounded-xl shadow-sm flex flex-col justify-between h-full"><div><p class="text-sm text-gray-500">Scanned Resources</p></div><div class="flex justify-between items-end pt-4"><p id="inspector-scanned-resources" class="text-3xl font-bold text-[#204071]">--</p><div class="bg-blue-100 p-3 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-box w-6 h-6 text-blue-600" viewBox="0 0 16 16">  <path d="M8.186 1.113a.5.5 0 0 0-.372 0L1.846 3.5 8 5.961 14.154 3.5zM15 4.239l-6.5 2.6v7.922l6.5-2.6V4.24zM7.5 14.762V6.838L1 4.239v7.923zM7.443.184a1.5 1.5 0 0 1 1.114 0l7.129 2.852A.5.5 0 0 1 16 3.5v8.662a1 1 0 0 1-.629.928l-7.185 2.874a.5.5 0 0 1-.372 0L.63 13.09a1 1 0 0 1-.63-.928V3.5a.5.5 0 0 1 .314-.464z"/></svg></div></div></div>
@@ -204,25 +205,15 @@ const updateInspectorSummaryCards = (scanStatus, findings) => {
 };
 
 const renderInspectorStatusTable = (statusList) => {
-    if (!statusList || statusList.length === 0) return `<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">${emptyCollectionMessage(window.inspectorApiData, "No Inspector status records returned for the planned scope.")}</p></div>`;
-    let table = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Inspector Status</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">EC2 Scan</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ECR Scan</th>' +
-                '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lambda Scan</th>' +
-                '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-    statusList.sort((a, b) => a.Region.localeCompare(b.Region)).forEach(s => {
-        table += `<tr class="hover:bg-gray-50">
+    if (!statusList || statusList.length === 0) return html`<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">${emptyCollectionMessage(window.inspectorApiData, "No Inspector status records returned for the planned scope.")}</p></div>`;
+    const rows = statusList.sort((a, b) => a.Region.localeCompare(b.Region)).map(s => html`<tr class="hover:bg-gray-50">
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${s.Region}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(s.InspectorStatus)}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(s.ScanEC2)}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(s.ScanECR)}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(s.ScanLambda)}</td>
-                  </tr>`;
-    });
-    table += '</tbody></table></div>';
-    return table;
+                  </tr>`);
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Inspector Status</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">EC2 Scan</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ECR Scan</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lambda Scan</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`;
 };
 
 const renderFullInspectorView = (findings, inspectorFindingsSH) => {
@@ -288,10 +279,10 @@ const renderFullInspectorView = (findings, inspectorFindingsSH) => {
         if (countDisplay) {
             const totalFindings = findings.length;
             if (visibleCount === totalFindings) {
-                countDisplay.innerHTML = `<div class="flex items-center space-x-1"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg><span>${totalFindings} findings</span></div>`;
+                setHtml(countDisplay, html`<div class="flex items-center space-x-1"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg><span>${totalFindings} findings</span></div>`);
                 countDisplay.className = "bg-[#eb3496] text-white px-3 py-1 rounded-full text-sm font-semibold flex items-center";
             } else {
-                countDisplay.innerHTML = `<div class="flex items-center space-x-1"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd"></path></svg><span>${visibleCount}/${totalFindings}</span></div>`;
+                setHtml(countDisplay, html`<div class="flex items-center space-x-1"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd"></path></svg><span>${visibleCount}/${totalFindings}</span></div>`);
                 countDisplay.className = "bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-semibold flex items-center animate-pulse";
             }
         }
@@ -312,13 +303,9 @@ const renderFullInspectorView = (findings, inspectorFindingsSH) => {
         const typeMap = { 'AWS_EC2_INSTANCE': 'EC2 Instance', 'AWS_ECR_REPOSITORY': 'ECR Repository', 'AWS_LAMBDA_FUNCTION': 'Lambda Function' };
         const resourceTypeDisplay = typeMap[resourceTypeRaw] || resourceTypeRaw;
 
-        let resourceDisplay = `<div class="font-semibold text-gray-800">${resourceTypeDisplay}</div>`;
-        if (resourceName) {
-            resourceDisplay += `<div class="text-gray-700">${resourceName}</div>`;
-        }
-        resourceDisplay += `<div class="font-mono text-gray-500 text-xs">${resourceId}</div>`;
+        const resourceDisplay = html`<div class="font-semibold text-gray-800">${resourceTypeDisplay}</div>${resourceName ? html`<div class="text-gray-700">${resourceName}</div>` : ''}<div class="font-mono text-gray-500 text-xs">${resourceId}</div>`;
 
-        return `<tr class="finding-row hover:bg-gray-50">
+        return html`<tr class="finding-row hover:bg-gray-50">
                     <td class="px-4 py-4 align-top whitespace-nowrap"><span class="px-2.5 py-0.5 text-xs font-semibold rounded-full ${severityClass}">${severity}</span></td>
                     <td class="px-4 py-4 align-top whitespace-nowrap text-xs text-gray-600">${firstSeen}</td>
                     <td class="px-4 py-4 align-top whitespace-nowrap text-xs text-gray-600">${f.Region}</td>
@@ -326,10 +313,10 @@ const renderFullInspectorView = (findings, inspectorFindingsSH) => {
                     <td class="px-4 py-4 align-top whitespace-nowrap text-xs text-gray-600">${f.type}</td>
                     <td class="px-4 py-4 align-top text-xs text-gray-600 break-words">${resourceDisplay}</td>
                 </tr>`;
-    }).join('');
+    });
 
     // --- MODIFICADO: Estructura HTML principal con el nuevo filtro y sin paginación ---
-    container.innerHTML = `
+    setHtml(container, html`
          <header class="flex justify-between items-center mb-6">
             <div>
                 <h2 class="text-2xl font-bold text-[#204071]">Inspector</h2>
@@ -367,7 +354,7 @@ const renderFullInspectorView = (findings, inspectorFindingsSH) => {
                             </label>
                             <select id="inspector-severity-filter" class="w-full px-4 py-2.5 text-sm border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#eb3496] focus:border-[#eb3496] transition-all duration-200 bg-white hover:border-gray-300">
                                 <option value="">All Severities</option>
-                                ${uniqueValues.severities.map(s => `<option value="${s}">${s}</option>`).join('')}
+                                ${join(uniqueValues.severities.map(s => html`<option value="${s}">${s}</option>`))}
                             </select>
                         </div>
                         <div class="group">
@@ -380,7 +367,7 @@ const renderFullInspectorView = (findings, inspectorFindingsSH) => {
                             </label>
                             <select id="inspector-region-filter" class="w-full px-4 py-2.5 text-sm border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#eb3496] focus:border-[#eb3496] transition-all duration-200 bg-white hover:border-gray-300">
                                 <option value="">All Regions</option>
-                                ${uniqueValues.regions.map(r => `<option value="${r}">${r}</option>`).join('')}
+                                ${join(uniqueValues.regions.map(r => html`<option value="${r}">${r}</option>`))}
                             </select>
                         </div>
                         <div class="group">
@@ -392,7 +379,7 @@ const renderFullInspectorView = (findings, inspectorFindingsSH) => {
                             </label>
                             <select id="inspector-resource-type-filter" class="w-full px-4 py-2.5 text-sm border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#eb3496] focus:border-[#eb3496] transition-all duration-200 bg-white hover:border-gray-300">
                                 <option value="">All Resources</option>
-                                ${uniqueValues.resourceTypes.map(rt => `<option value="${rt}">${rt}</option>`).join('')}
+                                ${join(uniqueValues.resourceTypes.map(rt => html`<option value="${rt}">${rt}</option>`))}
                             </select>
                         </div>
                         <div class="group">
@@ -425,16 +412,16 @@ const renderFullInspectorView = (findings, inspectorFindingsSH) => {
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Affected Resource</th>
                             </tr>
                         </thead>
-                        <tbody id="inspector-findings-tbody" class="bg-white divide-y divide-gray-200">${tableRowsHtml}</tbody>
+                        <tbody id="inspector-findings-tbody" class="bg-white divide-y divide-gray-200">${join(tableRowsHtml)}</tbody>
                     </table>
                 </div>
             </div>
             <div id="inspector-sh-content" class="inspector-tab-content hidden"></div>
         </div>
-    `;
+    `);
     renderCollectionNotice(container, window.inspectorApiData);
 
-    document.getElementById('inspector-status-details-content').innerHTML = renderInspectorStatusTable(scanStatus);
+    setHtml(document.getElementById('inspector-status-details-content'), renderInspectorStatusTable(scanStatus));
     updateInspectorSummaryCards(scanStatus, findings);
     const tabsNav = document.getElementById('inspector-tabs-results');
     if (tabsNav) tabsNav.addEventListener('click', handleTabClick(tabsNav, '.inspector-tab-content'));
@@ -453,6 +440,6 @@ const renderFullInspectorView = (findings, inspectorFindingsSH) => {
     }, 50);
 
     const shFindingsContainer = document.getElementById('inspector-sh-content');
-    shFindingsContainer.innerHTML = `<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Severity</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Title</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Resource type</th></tr></thead><tbody id="sh-inspector-tbody" class="bg-white divide-y divide-gray-200"></tbody></table></div><div id="sh-inspector-pagination-controls" class="mt-4 flex justify-center items-center space-x-2"></div>`;
+    setHtml(shFindingsContainer, html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Severity</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Title</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Resource type</th></tr></thead><tbody id="sh-inspector-tbody" class="bg-white divide-y divide-gray-200"></tbody></table></div><div id="sh-inspector-pagination-controls" class="mt-4 flex justify-center items-center space-x-2"></div>`);
     setupPagination(document.getElementById('sh-inspector-pagination-controls'), document.getElementById('sh-inspector-tbody'), inspectorFindingsSH, renderSecurityHubFindingsPage);
 };
