@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-const source = readFileSync(new URL('../audithor_project/static/js/collection.js', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../audithor/static/js/collection.js', import.meta.url), 'utf8');
 const { coverageMessage, coverageIsComplete, emptyCollectionMessage, renderCollectionNotice, isMigratedCollector, failedCollectionResponse } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const partial = { results: { _collection: { status: 'partial', coverageKnown: true, scanId: 'scan', units: [
     { service: 'acm', operation: 'list_certificates', status: 'failed', awsCode: '<img src=x onerror=alert(1)>' }

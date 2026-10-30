@@ -20,14 +20,14 @@ class ResourceParser(HTMLParser):
 
 
 def test_external_resources_are_pinned_and_integrity_checked():
-    template = Path(__file__).parents[1] / "audithor_project/templates/dashboard.html"
+    template = Path(__file__).resolve().parents[1] / "audithor/templates/dashboard.html"
     html = template.read_text()
     parser = ResourceParser()
     parser.feed(html)
 
     assert "https://cdn.tailwindcss.com" not in [resource["src"] for resource in parser.scripts]
     assert "vendor/tailwind-3.4.17.js" in html
-    vendor = Path(__file__).parents[1] / "audithor_project/static/vendor/tailwind-3.4.17.js"
+    vendor = Path(__file__).resolve().parents[1] / "audithor/static/vendor/tailwind-3.4.17.js"
     assert vendor.exists()
     digest = base64.b64encode(hashlib.sha384(vendor.read_bytes()).digest()).decode()
     assert f"sha384-{digest}" == "sha384-igm5BeiBt36UU4gqwWS7imYmelpTsZlQ45FZf+XBn9MuJbn4nQr7yx1yFydocC/K"
@@ -50,7 +50,7 @@ def test_external_resources_are_pinned_and_integrity_checked():
 
 
 def test_dashboard_and_vendored_tailwind_are_served_by_flask():
-    import audithor_app
+    from audithor import audithor_app
     from conftest import make_client
 
     client = make_client(audithor_app.app)

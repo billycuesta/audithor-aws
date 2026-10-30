@@ -1,4 +1,4 @@
-import rules
+from audithor import rules
 
 
 class AccessRecordingDict(dict):

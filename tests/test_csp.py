@@ -1,5 +1,5 @@
 from conftest import make_client
-import audithor_app
+from audithor import audithor_app
 
 
 def test_dashboard_has_expected_csp_and_security_headers():

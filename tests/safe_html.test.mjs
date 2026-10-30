@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { makeDom, PAYLOADS } from './helpers/xss_payloads.mjs';
-import { SafeHtml, escapeHtml, html, raw, join, setHtml, act, actOn, ACT_THIS, installActionDelegation } from '../audithor_project/static/js/safe_html.js';
+import { SafeHtml, escapeHtml, html, raw, join, setHtml, act, actOn, ACT_THIS, installActionDelegation } from '../audithor/static/js/safe_html.js';
 
 for (const payload of PAYLOADS) {
   assert.equal(escapeHtml(payload), payload.replace(/[&<>\"'`]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;', '`': '&#96;' })[char]));

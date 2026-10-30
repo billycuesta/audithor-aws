@@ -6,6 +6,11 @@
 __pycache__/
 *.py[cod]
 
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
 # Virtual environment
 # This ignores any directory named 'venv', 'env', 'ENV', etc.
 .venv

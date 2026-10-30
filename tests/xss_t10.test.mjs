@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { makeDom, PAYLOADS, assertNoInjection, clickAll, benignText, tagSequence } from './helpers/xss_payloads.mjs';
 
-const currentRoot = new URL('../audithor_project/static/js/views/', import.meta.url).href;
+const currentRoot = new URL('../audithor/static/js/views/', import.meta.url).href;
 const baselineRoot = new URL('./baseline/audithor_project/static/js/views/', import.meta.url).href;
 const specs = [
   {

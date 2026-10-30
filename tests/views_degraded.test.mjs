@@ -6,7 +6,7 @@ globalThis.window = window;
 globalThis.document = window.document;
 window.scopedResources = {};
 window.securityHubApiData = null;
-const root = new URL('../audithor_project/static/js/views/', import.meta.url).href;
+const root = new URL('../audithor/static/js/views/', import.meta.url).href;
 const coverage = { status: 'partial', coverageKnown: true, units: [] };
 
 const acm = await import(root + '09_acm.js');

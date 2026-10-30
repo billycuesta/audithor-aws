@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { makeDom, PAYLOADS, assertNoInjection, clickAll, benignText, tagSequence } from './helpers/xss_payloads.mjs';
-import { installActionDelegation } from '../audithor_project/static/js/safe_html.js';
+import { installActionDelegation } from '../audithor/static/js/safe_html.js';
 
 const cloudwatchFixture = () => ({ metadata: { executionDate: '2025-01-01' }, results: { alarms: [{ Region: 'us-east-1', AlarmName: 'CPU', StateValue: 'OK', Namespace: 'AWS/EC2', MetricName: 'CPUUtilization', ComparisonOperator: 'GreaterThanThreshold', Threshold: 80, AlarmActions: [] }], topics: [{ Region: 'us-east-1', TopicArn: 'arn:aws:sns:us-east-1:123:alerts', Subscriptions: [{ Endpoint: 'ops@example.com' }] }] } });
 const poison = (value, payload) => typeof value === 'string' ? payload : Array.isArray(value) ? value.map(item => poison(item, payload)) : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, poison(item, payload)])) : value;
 const cloudwatchBaseline = await import(new URL('./baseline/audithor_project/static/js/views/07_cloudwatch.js', import.meta.url));
-const cloudwatchConverted = await import(new URL('../audithor_project/static/js/views/07_cloudwatch.js', import.meta.url));
+const cloudwatchConverted = await import(new URL('../audithor/static/js/views/07_cloudwatch.js', import.meta.url));
 function renderCloudwatch(module, data) { window.cloudwatchApiData = data; window.securityHubApiData = { results: { findings: { cloudwatchFindings: [] } } }; document.body.innerHTML = '<div id="cloudwatch-view"></div>'; module.buildCloudwatchView(); return document.getElementById('cloudwatch-view'); }
 const parityDom = makeDom('<div></div>');
 const original = renderCloudwatch(cloudwatchBaseline, structuredClone(cloudwatchFixture())); const safe = renderCloudwatch(cloudwatchConverted, structuredClone(cloudwatchFixture()));
@@ -20,7 +20,7 @@ const cloudtrailFixture = () => ({ metadata: { executionDate: '2025-01-01' }, re
   trailguard_findings: [{ TrailName: 'main-trail', Region: 'us-east-1', TrailArn: 'arn:aws:cloudtrail:us-east-1:123:trail/main', DirectCloudTrailEventBridge: { CloudTrailEventBridgeEnabled: true, Rules: [{ Name: 'direct-rule', Region: 'us-east-1', Targets: [{ Arn: 'arn:aws:sns:us-east-1:123:topic' }], SNSTargets: [{ TopicName: 'alerts', TopicArn: 'arn:aws:sns:us-east-1:123:alerts', DisplayName: 'Alerts', RuleName: 'direct-rule', SubscriptionCount: 1, Subscriptions: [{ Protocol: 'email', Endpoint: 'ops@example.com', Status: 'Confirmed' }] }] }] }, EventBridgeFlow: { S3EventBridgeEnabled: true, CompleteFlow: true, Rules: [{ Name: 's3-rule', Targets: [{ Arn: 'arn:aws:lambda:us-east-1:123:function:handler' }], SNSTargets: [] }] }, S3Destination: { BucketName: 'logs', Notifications: [{ Type: 'SNS', Target: 'arn:aws:sns:us-east-1:123:alerts' }] }, CloudWatchDestination: { LogGroupName: 'trail', Subscriptions: [{ Type: 'Lambda', Target: 'arn:aws:lambda:us-east-1:123:function:handler' }], MetricFilters: [] } }]
 } });
 const cloudtrailBaseline = await import(new URL('./baseline/audithor_project/static/js/views/06_cloudtrail.js', import.meta.url));
-const cloudtrailConverted = await import(new URL('../audithor_project/static/js/views/06_cloudtrail.js', import.meta.url));
+const cloudtrailConverted = await import(new URL('../audithor/static/js/views/06_cloudtrail.js', import.meta.url));
 const cloudtrailMarkup = '<div id="cloudtrail-view"></div><input id="access-key-input" value="key"><input id="secret-key-input" value="secret"><input id="session-token-input" value=""><div id="details-modal" class="hidden"><h2 id="modal-title"></h2><div id="modal-content"></div></div>';
 function renderCloudtrail(module, data) {
   document.body.innerHTML = cloudtrailMarkup;

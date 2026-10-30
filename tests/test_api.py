@@ -2,9 +2,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 import pytest
-import audithor_app
+from audithor import audithor_app
 from conftest import make_client
-from audithor_project.collectors import playground
+from audithor.collectors import playground
 
 
 def test_sslscan_removal_contract(client, monkeypatch):

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { pathToFileURL } from 'node:url';
 import { makeDom, assertNoInjection, clickAll, benignText, tagSequence, PAYLOADS } from './helpers/xss_payloads.mjs';
-import { installActionDelegation } from '../audithor_project/static/js/safe_html.js';
+import { installActionDelegation } from '../audithor/static/js/safe_html.js';
 
 const fixtures = {
   compute: { metadata: { executionDate: '2026-01-01' }, results: { ec2_instances: [{ ARN: 'arn:aws:ec2:us-east-1:123:instance/i-1', Region: 'us-east-1', InstanceId: 'i-1', VpcId: 'vpc-1', SecurityGroups: ['sg-1'], IamInstanceProfile: 'role', State: 'running', PublicIpAddress: '127.0.0.1', OperatingSystem: 'Linux', Tags: { Name: 'safe' } }], lambda_functions: [{ ARN: 'arn:aws:lambda:us-east-1:123:function:f', Region: 'us-east-1', FunctionName: 'f', Role: 'arn:aws:iam::123:role/r', Runtime: 'nodejs', Tags: { Name: 'safe' }, VpcConfig: { VpcId: 'vpc-1' } }], eks_clusters: [{ ARN: 'arn:aws:eks:us-east-1:123:cluster/eks-one', Region: 'us-east-1', ClusterName: 'eks-one' }], ecs_clusters: [{ ARN: 'arn:aws:ecs:us-east-1:123:cluster/ecs-one', Region: 'us-east-1', ClusterName: 'ecs-one', Status: 'ACTIVE', ServicesCount: 2 }] } },
@@ -10,7 +10,7 @@ const fixtures = {
 };
 const clonePayload = (value, payload) => typeof value === 'string' ? payload : Array.isArray(value) ? value.map(item => clonePayload(item, payload)) : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, clonePayload(item, payload)])) : value;
 const assertNoLiteralMarkup = root => assert.doesNotMatch(root.textContent, /<(?:div|td|tr|span|pre)\b|<\//i);
-const root = new URL('../audithor_project/static/js/views/', import.meta.url);
+const root = new URL('../audithor/static/js/views/', import.meta.url);
 const baselineRoot = new URL('./baseline/audithor_project/static/js/views/', import.meta.url);
 const views = [
   { file: '10_compute.js', id: 'compute-view', global: 'computeApiData', build: 'buildComputeView', fixture: fixtures.compute },

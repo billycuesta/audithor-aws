@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "audithor"
+dynamic = ["version"]
+description = "An AWS security audit dashboard for assessing cloud security configurations."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+classifiers = [
+  "Environment :: Web Environment",
+  "Topic :: Security",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+  "boto3>=1.39.13,<2",
+  "botocore>=1.39.13,<2",
+  "Flask>=3.1.1,<4",
+  "flask-cors>=6.0.1,<7",
+  "pytz>=2025.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
+[project.urls]
+Homepage = "https://github.com/billycuesta/audithor-aws"
+Repository = "https://github.com/billycuesta/audithor-aws"
+
+[tool.hatch.version]
+path = "audithor/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["audithor"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "audithor/",
+  "tests/",
+  "README.md",
+  "LICENSE",
+  "pyproject.toml",
+  "requirements.txt",
+  "requirements-dev.txt",
+]
+exclude = [
+  ".git/",
+  ".tools/",
+  "odd/",
+  "node_modules/",
+  "tests/baseline/",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -8,8 +8,8 @@ import boto3
 import pytest
 from botocore.exceptions import ClientError, ConnectTimeoutError, EndpointConnectionError, ReadTimeoutError
 from botocore.stub import Stubber
-from collectors import acm, databases, inspector
-from collectors.diagnostics import Collection, classify_error
+from audithor.collectors import acm, databases, inspector
+from audithor.collectors.diagnostics import Collection, classify_error
 
 
 def error(code="AccessDeniedException"):

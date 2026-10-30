@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { PAYLOADS, assertNoInjection, clickAll, benignText, tagSequence } from './helpers/xss_payloads.mjs';
 
-const current = resolve('audithor_project/static/js/views/');
+const current = resolve('audithor/static/js/views/');
 const baseline = resolve('tests/baseline/audithor_project/static/js/views/');
 const load = async (base, file) => import(pathToFileURL(resolve(base, file)).href + `?run=${Math.random()}`);
 const coverage = { status: 'complete', coverageKnown: true, units: [] };

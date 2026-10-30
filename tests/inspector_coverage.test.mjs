@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-const source = readFileSync(new URL('../audithor_project/static/js/collection.js', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../audithor/static/js/collection.js', import.meta.url), 'utf8');
 const { mergeInspectorCoverage } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const status = { status: 'complete', coverageKnown: true, units: [{ service: 'inspector2', operation: 'status', status: 'complete' }] };
 const findings = { status: 'partial', coverageKnown: true, units: [{ service: 'inspector2', operation: 'findings', status: 'partial' }] };

@@ -1,6 +1,6 @@
 import pytest
 
-from audithor_project import audithor_app
+from audithor import audithor_app
 from conftest import make_client
 
 

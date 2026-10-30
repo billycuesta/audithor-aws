@@ -29,7 +29,7 @@ function install(data) {
   document.body.innerHTML = '<div id="network-policies-view"></div><div id="details-modal" class="hidden"><h2 id="modal-title"></h2><div id="modal-content"></div></div>';
 }
 const baseline = await import(new URL('./baseline/audithor_project/static/js/views/13_network_policies.js', import.meta.url));
-const converted = await import(new URL('../audithor_project/static/js/views/13_network_policies.js', import.meta.url));
+const converted = await import(new URL('../audithor/static/js/views/13_network_policies.js', import.meta.url));
 const tabIds = ['np-summary-content', 'np-vpcs-content', 'np-acls-content', 'np-sgs-content', 'np-diagram-container', 'np-detail-content'];
 function render(module, data) { install(data); module.buildNetworkPoliciesView(); return tabIds.map(id => document.getElementById(id)); }
 const parityDom = makeDom('<div id="network-policies-view"></div><div id="details-modal" class="hidden"><h2 id="modal-title"></h2><div id="modal-content"></div></div>');

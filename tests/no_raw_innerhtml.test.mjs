@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../audithor_project/static/js');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../audithor/static/js');
 const allowlist = [
   // setHtml is the sole sanctioned innerHTML writer.
   { file: 'safe_html.js', rule: 'html-write' },

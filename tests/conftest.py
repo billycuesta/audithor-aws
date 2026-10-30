@@ -1,7 +1,4 @@
-import sys
-from pathlib import Path
 from flask.testing import FlaskClient
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "audithor_project"))
 
 
 class HostBoundClient(FlaskClient):

@@ -5,7 +5,7 @@ import { makeDom, assertNoInjection, clickAll, benignText, tagSequence, PAYLOADS
 const dom = makeDom('<input id="access-key-input" value="key"><input id="secret-key-input" value="secret"><input id="session-token-input"><div id="playground-view"></div>');
 window.allAvailableRegions = [];
 const baselineUrl = pathToFileURL(`${process.cwd()}/tests/baseline/audithor_project/static/js/views/16_playground.js`).href;
-const currentUrl = pathToFileURL(`${process.cwd()}/audithor_project/static/js/views/16_playground.js`).href;
+const currentUrl = pathToFileURL(`${process.cwd()}/audithor/static/js/views/16_playground.js`).href;
 const baseline = await import(baselineUrl);
 const current = await import(currentUrl);
 const fetchCalls = [];

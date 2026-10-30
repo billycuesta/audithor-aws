@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { PAYLOADS, assertNoInjection, benignText, clickAll, makeDom, tagSequence } from './helpers/xss_payloads.mjs';
-import { installActionDelegation } from '../audithor_project/static/js/safe_html.js';
+import { installActionDelegation } from '../audithor/static/js/safe_html.js';
 
 const baselineUrl = new URL('./baseline/audithor_project/static/js/views/01_iam.js', import.meta.url).href;
-const currentUrl = new URL('../audithor_project/static/js/views/01_iam.js', import.meta.url).href;
+const currentUrl = new URL('../audithor/static/js/views/01_iam.js', import.meta.url).href;
 const inputMarkup = '<div id="iam-view"></div><div id="details-modal" class="hidden"><h2 id="modal-title"></h2><div id="modal-content"></div></div><input id="access-key-input"><input id="secret-key-input"><input id="session-token-input"><div id="iam-search-results-container"></div><div id="iam-search-btn"></div><span id="search-btn-text"></span><div id="iam-sh-filter-controls"></div><div id="sh-iam-findings-container"></div>';
 const makeFixture = () => ({
   iamApiData: null, securityHubApiData: { results: { findings: { iamFindings: [] } } }, securityHubStatusApiData: null,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { makeDom, assertNoInjection, clickAll, benignText, tagSequence, PAYLOADS } from './helpers/xss_payloads.mjs';
-import { installActionDelegation } from '../audithor_project/static/js/safe_html.js';
+import { installActionDelegation } from '../audithor/static/js/safe_html.js';
 
 const fixture = {
   kmsApiData: {
@@ -55,14 +55,14 @@ async function loadView(moduleDir, config, dataFixture) {
   const mod = await import(new URL(`${moduleDir}/${config.module}.js`, import.meta.url));
   if (mod.openModalWithKmsPolicy) dom.window.openModalWithKmsPolicy = mod.openModalWithKmsPolicy;
   if (mod.openModalWithSecretDetails) dom.window.openModalWithSecretDetails = mod.openModalWithSecretDetails;
-  if (moduleDir.startsWith('../audithor_project')) installActionDelegation(dom.window.document);
+  if (moduleDir.startsWith('../audithor')) installActionDelegation(dom.window.document);
   mod[config.builder]();
   return { dom, mod, root: dom.window.document.getElementById(config.id) };
 }
 
 for (const config of configs) {
   const baseline = await loadView(`./baseline/audithor_project/static/js/views`, config, fixture);
-  const current = await loadView(`../audithor_project/static/js/views`, config, fixture);
+  const current = await loadView(`../audithor/static/js/views`, config, fixture);
   assertNoLiteralMarkup(baseline.root);
   assertNoLiteralMarkup(current.root);
   assert.equal(benignText(current.root), benignText(baseline.root), `${config.name} benign text parity`);
@@ -110,7 +110,7 @@ for (const config of configs) {
 
   for (const payload of PAYLOADS) {
     const poisonedFixture = replaceStrings(structuredClone(fixture), payload);
-    const candidate = await loadView('../audithor_project/static/js/views', config, poisonedFixture);
+    const candidate = await loadView('../audithor/static/js/views', config, poisonedFixture);
     assertNoInjection(candidate.dom.window, candidate.root);
     clickAll(candidate.dom.window, candidate.root);
     candidate.dom.window.close();
@@ -130,7 +130,7 @@ for (const [name, index] of [['policy', 0], ['secret', 0]]) {
   baseOpen(index);
 
   const domCurrent = makeDom('<div id="details-modal" class="hidden"><h1 id="modal-title"></h1><div id="modal-content"></div></div>');
-  const currentModule = await import(new URL('../audithor_project/static/js/views/12_kms_secrets.js', import.meta.url));
+  const currentModule = await import(new URL('../audithor/static/js/views/12_kms_secrets.js', import.meta.url));
   domCurrent.window.kmsApiData = structuredClone(fixture.kmsApiData);
   domCurrent.window.secretsManagerApiData = structuredClone(fixture.secretsManagerApiData);
   const currentOpen = name === 'policy' ? currentModule.openModalWithKmsPolicy : currentModule.openModalWithSecretDetails;
@@ -152,7 +152,7 @@ for (const [name, index] of [['policy', 0], ['secret', 0]]) {
     const dom = makeDom('<div id="details-modal" class="hidden"><h1 id="modal-title"></h1><div id="modal-content"></div></div>');
     dom.window.kmsApiData = hostileFixture.kmsApiData;
     dom.window.secretsManagerApiData = hostileFixture.secretsManagerApiData;
-    const mod = await import(new URL('../audithor_project/static/js/views/12_kms_secrets.js', import.meta.url));
+    const mod = await import(new URL('../audithor/static/js/views/12_kms_secrets.js', import.meta.url));
     const open = name === 'policy' ? mod.openModalWithKmsPolicy : mod.openModalWithSecretDetails;
     open(index);
     assertNoInjection(dom.window, dom.window.document.getElementById('details-modal'));

@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PAYLOADS, makeDom, assertNoInjection } from './helpers/xss_payloads.mjs';
-import { log } from '../audithor_project/static/js/utils.js';
+import { log } from '../audithor/static/js/utils.js';
 const dom = makeDom('<div id="log-container"></div>');
 for (const payload of PAYLOADS) log(payload, 'info');
 assertNoInjection(dom.window, dom.window.document.querySelector('#log-container'));
 const logRoot = dom.window.document.querySelector('#log-container');
 assert.equal(logRoot.querySelectorAll('img, svg, script').length, 0);
 assert.equal(logRoot.querySelector('.log-entry').lastChild.textContent.trim(), PAYLOADS.at(-1));
-const source = await readFile(new URL('../audithor_project/static/js/app.js', import.meta.url), 'utf8');
+const source = await readFile(new URL('../audithor/static/js/app.js', import.meta.url), 'utf8');
 const baselineSource = await readFile(new URL('./baseline/audithor_project/static/js/app.js', import.meta.url), 'utf8');
 const emptyState = text => text.match(/const createInitialEmptyState = \(\) => `(.*?)`;/s)?.[1];
 assert.equal(emptyState(source), emptyState(baselineSource), 'benign empty-state markup remains unchanged');

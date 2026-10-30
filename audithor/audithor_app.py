@@ -17,14 +17,14 @@ import logging
 import traceback
 
 # Importa el motor de reglas (sin cambios)
-from rules import RULES_TO_CHECK, coverage_gaps
-from collectors.diagnostics import logger as collection_logger, AWS_ERRORS, classify_error
-from collectors.network_policies import get_network_details_table
-from collectors import secrets_manager
+from .rules import RULES_TO_CHECK, coverage_gaps
+from .collectors.diagnostics import logger as collection_logger, AWS_ERRORS, classify_error
+from .collectors.network_policies import get_network_details_table
+from .collectors import secrets_manager
 from botocore.exceptions import BotoCoreError, ClientError
 
 # --- 1. IMPORTA TUS NUEVOS MÓDULOS ---
-from collectors import (
+from .collectors import (
     utils, iam, securityhub, exposure, guardduty, waf, cloudtrail,
     cloudwatch, inspector, kms, acm, compute, databases,
     network_policies, connectivity, config_sh, playground, ecr, codepipeline, inventory
@@ -896,7 +896,7 @@ def run_secrets_manager_audit():
 # ==============================================================================
 # EJECUCIÓN SERVIDOR
 # ==============================================================================
-if __name__ == '__main__':
+def main():
     host, port = get_bind_config()
     try:
         loopback = ipaddress.ip_address(host).is_loopback
@@ -909,3 +909,7 @@ if __name__ == '__main__':
         webbrowser.open_new(url)
     threading.Timer(1, open_browser).start()
     app.run(host=host, port=port, debug=False)
+
+
+if __name__ == '__main__':
+    main()

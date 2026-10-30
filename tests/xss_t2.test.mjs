@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { PAYLOADS, makeDom, assertNoInjection, clickAll, benignText, tagSequence } from './helpers/xss_payloads.mjs';
-import { installActionDelegation } from '../audithor_project/static/js/safe_html.js';
+import { installActionDelegation } from '../audithor/static/js/safe_html.js';
 
 const baselineUrl = new URL('./baseline/audithor_project/static/js/views/02_exposure.js', import.meta.url).href;
-const currentUrl = new URL('../audithor_project/static/js/views/02_exposure.js', import.meta.url).href;
+const currentUrl = new URL('../audithor/static/js/views/02_exposure.js', import.meta.url).href;
 const fixture = () => ({ metadata: { executionDate: '2025-01-01' }, results: { details: {
   'ALB/NLB Public': { 'us-east-1': [{ name: 'edge-lb', region: 'us-east-1', listeners: [{ protocol: 'HTTPS', port: 443, policyName: 'TLS-1-2', tlsVersions: ['TLSv1.2'], ciphers: ['cipher-a'], rules: [], targetGroupName: 'tg', targets: [{ Id: '10.0.0.1' }], isOutdated: false }] }] },
   'API Gateway Public': { 'us-east-1': [{ name: 'api-one', id: 'abc123', region: 'us-east-1', apiType: 'REST', endpointConfiguration: ['REGIONAL'], stages: ['prod'], createdDate: '2025-01-01', description: 'benign API', integrations: [{ method: 'GET', path: '/items', type: 'AWS_PROXY', uri: 'arn:aws:lambda:us-east-1:123:function:test' }] }] },

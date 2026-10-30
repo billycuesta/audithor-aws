@@ -46,7 +46,7 @@ The Playground offers path analysis and permission simulation.
 
 ## Tech stack
 
-- Backend: Python 3, Flask, Boto3 (`audithor_project/audithor_app.py`)
+- Backend: Python 3, Flask, Boto3 (`audithor/audithor_app.py`)
 - Frontend: HTML, Tailwind CSS, Chart.js, vanilla JS modules
 
 ## Prerequisites
@@ -70,7 +70,7 @@ pip install -r requirements.txt
 Run the app:
 
 ```bash
-python audithor_project/audithor_app.py
+python -m audithor
 ```
 
 Then in the browser:
@@ -100,12 +100,12 @@ Best practices:
 
 ### Errors, logs, and browser protections
 - API error responses use generic messages and a category. Structured server logs record diagnostic categories and exception types (and selected request identifiers), not exception text.
-- `build_csp` in `audithor_project/audithor_app.py` sets the dashboard Content-Security-Policy: `default-src 'self'`; scripts may load from self and jsDelivr; styles from self, inline styles and Google Fonts; fonts from self, Google Fonts and data URLs; images from self and data URLs; connections to self and the loopback hosts on the configured port. Objects, base URLs, form submissions and framing are denied.
+- `build_csp` in `audithor/audithor_app.py` sets the dashboard Content-Security-Policy: `default-src 'self'`; scripts may load from self and jsDelivr; styles from self, inline styles and Google Fonts; fonts from self, Google Fonts and data URLs; images from self and data URLs; connections to self and the loopback hosts on the configured port. Objects, base URLs, form submissions and framing are denied.
 - Responses set `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`; API responses also set `Cache-Control: no-store`. HTML responses also set Permissions-Policy and same-origin Cross-Origin-Opener-Policy.
-- Chart.js and the stacked100 plugin CDN scripts use Subresource Integrity. Tailwind is vendored under `audithor_project/static/vendor` because `cdn.tailwindcss.com` sends no CORS headers, preventing integrity checks. Google Fonts is loaded without integrity because its CSS varies by browser.
+- Chart.js and the stacked100 plugin CDN scripts use Subresource Integrity. Tailwind is vendored under `audithor/static/vendor` because `cdn.tailwindcss.com` sends no CORS headers, preventing integrity checks. Google Fonts is loaded without integrity because its CSS varies by browser.
 
 ### Rendering safety for contributors
-Treat AWS data and imported JSON as untrusted. Build markup with the `html` tagged template and `setHtml` from `audithor_project/static/js/safe_html.js`; use `act()` rather than inline event handlers. Never assign `innerHTML` directly in application code or pass data to `raw()`. The repository currently has no `tests/no_raw_innerhtml.test.mjs` guard test; `setHtml` is the controlled sink and requires a `SafeHtml` value.
+Treat AWS data and imported JSON as untrusted. Build markup with the `html` tagged template and `setHtml` from `audithor/static/js/safe_html.js`; use `act()` rather than inline event handlers. Never assign `innerHTML` directly in application code or pass data to `raw()`. The repository currently has no `tests/no_raw_innerhtml.test.mjs` guard test; `setHtml` is the controlled sink and requires a `SafeHtml` value.
 
 ### Known limits
 - There is no per-launch API token, and the local API uses plain HTTP.
