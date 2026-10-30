@@ -5,6 +5,7 @@
 
 // --- IMPORTACIONES ---
 import { handleTabClick, renderSecurityHubFindings, createStatusBadge } from '../utils.js';
+import { html, join, setHtml, act } from '../safe_html.js';
 
 // --- DESCRIPCIONES DE SERVICIOS ---
 const serviceDescriptions = {
@@ -36,7 +37,7 @@ export const buildEcrView = () => {
         r.IsPublic || !r.ScanOnPush || !r.ImageSigningEnabled || r.ImageTagMutability === 'MUTABLE'
     ).length;
 
-    container.innerHTML = `
+    setHtml(container, html`
         <header class="flex justify-between items-center mb-6">
             <div>
                 <h2 class="text-2xl font-bold text-[#204071]">Elastic Container Registry (ECR)</h2>
@@ -69,7 +70,7 @@ export const buildEcrView = () => {
             </div>
             <div id="ecr-sh-content" class="ecr-tab-content hidden">${createEcrSecurityHubHtml()}</div>
         </div>
-    `;
+    `);
 
     updateEcrSummaryCards(repositories);
     renderSecurityHubFindings(ecrSecurityHubFindings, 'sh-ecr-findings-container', 'No Security Hub findings related to ECR were found.');
@@ -80,7 +81,7 @@ export const buildEcrView = () => {
 
 // --- RENDERIZADOR DE DESCRIPCIÓN DE SERVICIOS ---
 const renderServiceDescription = (serviceInfo) => {
-    return `
+    return html`
         <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
             <h3 class="text-lg font-semibold text-gray-800 mb-3">${serviceInfo.title}</h3>
             <div class="space-y-3">
@@ -103,7 +104,7 @@ const renderServiceDescription = (serviceInfo) => {
 
 // --- FUNCIONES INTERNAS DEL MÓDULO (NO SE EXPORTAN) ---
 
-const createEcrSummaryCardsHtml = () => `
+const createEcrSummaryCardsHtml = () => html`
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
         <div class="bg-white border border-gray-100 p-5 rounded-xl shadow-sm">
             <div><p class="text-sm text-gray-500">Total Repositories</p></div>
@@ -178,187 +179,132 @@ export const openModalWithEcrPolicy = (repoIndex) => {
 
     modalTitle.textContent = `Repository Policy for: ${repo.RepositoryName}`;
     const formattedPolicy = JSON.stringify(repo.Policy, null, 2);
-    modalContent.innerHTML = `<div class="text-left"><pre class="bg-[#204071] text-white text-xs font-mono rounded-md p-3 overflow-x-auto"><code>${formattedPolicy}</code></pre></div>`;
+    setHtml(modalContent, html`<div class="text-left"><pre class="bg-[#204071] text-white text-xs font-mono rounded-md p-3 overflow-x-auto"><code></code></pre></div>`);
+    modalContent.querySelector('code').textContent = formattedPolicy;
     modal.classList.remove('hidden');
 };
 
 
 const renderSecurityAnalysisTable = (repositories) => {
     if (!repositories || repositories.length === 0) {
-        return `
-            <div class="bg-white p-6 rounded-xl border border-gray-100">
-                <div class="text-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="mx-auto h-12 w-12 text-gray-400" viewBox="0 0 16 16">
-                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
-                        <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286m1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94"/>
-                    </svg>
-                    <h3 class="mt-2 text-sm font-medium text-gray-900">No ECR repositories found</h3>
-                    <p class="mt-1 text-sm text-gray-500">This account does not have any ECR repositories configured.</p>
-                </div>
-            </div>
-        `;
+        return html`<div class="bg-white p-6 rounded-xl border border-gray-100"><div class="text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="mx-auto h-12 w-12 text-gray-400" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286m1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94"/></svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No ECR repositories found</h3><p class="mt-1 text-sm text-gray-500">This account does not have any ECR repositories configured.</p>
+        </div></div>`;
     }
 
-    let tableHtml = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
-                    '<th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Repository</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Repository ARN</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Public Access</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vulnerability Scanning</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Image Signing</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tag Mutability</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Risk Level</th>' +
-                    '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-
-    repositories.sort((a,b) => a.Region.localeCompare(b.Region) || a.RepositoryName.localeCompare(b.RepositoryName)).forEach((repo) => {
+    const rows = [...repositories].sort((a, b) => a.Region.localeCompare(b.Region) || a.RepositoryName.localeCompare(b.RepositoryName)).map(repo => {
         const publicBadge = createSecurityStatusBadge('', !repo.IsPublic, 'public');
         const scanBadge = createSecurityStatusBadge(repo.ScanOnPush ? 'Enabled' : 'Disabled', repo.ScanOnPush);
         const signingBadge = createSecurityStatusBadge(repo.ImageSigningEnabled ? 'Enabled' : 'Disabled', repo.ImageSigningEnabled);
         const mutabilityBadge = createSecurityStatusBadge('', repo.ImageTagMutability === 'IMMUTABLE', 'mutability');
-        
-        // Calculate comprehensive risk level
-        let riskLevel = 'Low Risk';
-        let riskColor = 'green';
-        
         const riskFactors = [];
         if (repo.IsPublic) riskFactors.push('Public');
         if (!repo.ScanOnPush) riskFactors.push('No Scanning');
         if (!repo.ImageSigningEnabled) riskFactors.push('No Signing');
         if (repo.ImageTagMutability === 'MUTABLE') riskFactors.push('Mutable Tags');
-        
-        if (riskFactors.length >= 3) {
-            riskLevel = 'Critical Risk';
-            riskColor = 'red';
-        } else if (riskFactors.length >= 2) {
-            riskLevel = 'High Risk';
-            riskColor = 'red';
-        } else if (riskFactors.length === 1) {
-            riskLevel = 'Medium Risk';
-            riskColor = 'yellow';
-        }
-
-        const riskBadge = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-${riskColor}-100 text-${riskColor}-800">${riskLevel}</span>`;
-
+        const riskLevel = riskFactors.length >= 3 ? 'Critical Risk' : riskFactors.length >= 2 ? 'High Risk' : riskFactors.length === 1 ? 'Medium Risk' : 'Low Risk';
+        const riskColor = riskFactors.length >= 2 ? 'red' : riskFactors.length === 1 ? 'yellow' : 'green';
+        const riskBadge = html`<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-${riskColor}-100 text-${riskColor}-800">${riskLevel}</span>`;
         const scopeDetails = window.scopedResources[repo.RepositoryArn];
         const isScoped = !!scopeDetails;
         const rowClass = isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50';
         const scopeComment = isScoped ? scopeDetails.comment : '';
-        const scopeIcon = isScoped 
-            ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>` 
-            : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`;
-        const scopeButton = `<button onclick="openScopeModal('${repo.RepositoryArn}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
-
-
-        tableHtml += `
-            <tr class="${rowClass}">
-                <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
-                <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600">${repo.Region}</td>
-                <td class="px-4 py-4 align-top text-sm font-medium text-gray-800 break-words">${repo.RepositoryName}</td>
-                <td class="px-4 py-4 align-top text-xs font-mono text-gray-500 break-all">${repo.RepositoryArn}</td>
-                <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${publicBadge}</td>
-                <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${scanBadge}</td>
-                <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${signingBadge}</td>
-                <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${mutabilityBadge}</td>
-                <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${riskBadge}</td>
-            </tr>
-        `;
+        // Fixed SVG icons are trusted markup; no external data is inserted into them.
+        const scopeIcon = isScoped
+            ? html`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206a.18.18 0 0 1 .098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`
+            : html`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`;
+        const scopeButton = html`<button ${act('openScopeModal', repo.RepositoryArn, encodeURIComponent(scopeComment))} title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
+        return html`<tr class="${rowClass}">
+            <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
+            <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600">${repo.Region}</td><td class="px-4 py-4 align-top text-sm font-medium text-gray-800 break-words">${repo.RepositoryName}</td>
+            <td class="px-4 py-4 align-top text-xs font-mono text-gray-500 break-all">${repo.RepositoryArn}</td><td class="px-4 py-4 align-top whitespace-nowrap text-sm">${publicBadge}</td>
+            <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${scanBadge}</td><td class="px-4 py-4 align-top whitespace-nowrap text-sm">${signingBadge}</td>
+            <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${mutabilityBadge}</td><td class="px-4 py-4 align-top whitespace-nowrap text-sm">${riskBadge}</td>
+        </tr>`;
     });
-    tableHtml += '</tbody></table></div>';
-    return tableHtml;
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Repository</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Repository ARN</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Public Access</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vulnerability Scanning</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Image Signing</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tag Mutability</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Risk Level</th>
+    </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`;
 };
 
 
 const renderComprehensiveRepositoriesTable = (repositories) => {
     if (!repositories || repositories.length === 0) {
-        return `
-            <div class="bg-white p-6 rounded-xl border border-gray-100">
-                <div class="text-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="mx-auto h-12 w-12 text-gray-400" viewBox="0 0 16 16">
-                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
-                        <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286m1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94"/>
-                    </svg>
-                    <h3 class="mt-2 text-sm font-medium text-gray-900">No ECR repositories found</h3>
-                    <p class="mt-1 text-sm text-gray-500">This account does not have any ECR repositories configured.</p>
-                </div>
-            </div>
-        `;
+        return html`<div class="bg-white p-6 rounded-xl border border-gray-100"><div class="text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="mx-auto h-12 w-12 text-gray-400" viewBox="0 0 16 16">
+                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+                <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286m1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94"/>
+            </svg><h3 class="mt-2 text-sm font-medium text-gray-900">No ECR repositories found</h3>
+            <p class="mt-1 text-sm text-gray-500">This account does not have any ECR repositories configured.</p>
+        </div></div>`;
     }
 
-    let tableHtml = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
-                    '<th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>' + 
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Repository</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Repository ARN</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Encryption</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lifecycle Policy</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Signing Profile</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Repository Policy</th>' +
-                    '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recommendations</th>' +
-                    '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+    const rows = [...repositories].sort((a, b) => a.Region.localeCompare(b.Region) || a.RepositoryName.localeCompare(b.RepositoryName)).map((repo, index) => {
+        const lifecyclePolicyStatus = repo.HasLifecyclePolicy
+            ? html`<span class="inline-flex items-center px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-800">Configured</span>`
+            : html`<span class="inline-flex items-center px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-800">None</span>`;
+        const signingProfile = repo.SigningProfileName
+            ? html`<span class="inline-flex items-center px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-800 font-mono">${repo.SigningProfileName}</span>`
+            : html`<span class="inline-flex items-center px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-800">None</span>`;
+        const policyButton = repo.Policy
+            ? html`<button ${act('openModalWithEcrPolicy', index)} class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition">View Policy</button>`
+            : html`<span class="inline-flex items-center px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-800">None</span>`;
 
-    repositories.sort((a,b) => a.Region.localeCompare(b.Region) || a.RepositoryName.localeCompare(b.RepositoryName)).forEach((repo, index) => {
-        const lifecyclePolicyStatus = repo.HasLifecyclePolicy ? 
-            '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Configured</span>' :
-            '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">None</span>';
-
-        const signingProfile = repo.SigningProfileName ? 
-            `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 font-mono">${repo.SigningProfileName}</span>` : 
-            '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">None</span>';
-        
-        const policyButton = repo.Policy ? 
-            `<button onclick="openModalWithEcrPolicy(${index})" class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition">View Policy</button>` : 
-            '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">None</span>';
-
-        // Generate recommendations
         const recommendations = [];
         if (repo.IsPublic) recommendations.push('Remove public access');
         if (!repo.ScanOnPush) recommendations.push('Enable vulnerability scanning');
         if (!repo.ImageSigningEnabled) recommendations.push('Configure image signing');
         if (repo.ImageTagMutability === 'MUTABLE') recommendations.push('Enable tag immutability');
         if (!repo.HasLifecyclePolicy) recommendations.push('Add lifecycle policy');
-        
-        const recommendationText = recommendations.length > 0 ? 
-            recommendations.slice(0, 2).join(', ') + (recommendations.length > 2 ? '...' : '') : 
-            'Good configuration';
-        
-        const recommendationColor = recommendations.length > 2 ? 'red' : 
-                                   recommendations.length > 0 ? 'yellow' : 'green';
-
-        const recommendationBadge = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-${recommendationColor}-100 text-${recommendationColor}-800">${recommendationText}</span>`;
+        const recommendationText = recommendations.length > 0
+            ? recommendations.slice(0, 2).join(', ') + (recommendations.length > 2 ? '...' : '')
+            : 'Good configuration';
+        const recommendationColor = recommendations.length > 2 ? 'red' : recommendations.length > 0 ? 'yellow' : 'green';
+        const recommendationBadge = html`<span class="inline-flex items-center px-2.5 py-0.5 text-xs font-medium bg-${recommendationColor}-100 text-${recommendationColor}-800">${recommendationText}</span>`;
 
         const scopeDetails = window.scopedResources[repo.RepositoryArn];
         const isScoped = !!scopeDetails;
         const rowClass = isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50';
         const scopeComment = isScoped ? scopeDetails.comment : '';
-        const scopeIcon = isScoped 
-            ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206c.145.021.204.2.098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>` 
-            : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`;
-        const scopeButton = `<button onclick="openScopeModal('${repo.RepositoryArn}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
+        // Fixed SVG icon markup; no data is interpolated into the fragment.
+        const scopeIcon = isScoped
+            ? html`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-red-600" viewBox="0 0 16 16"><path d="M7.84 4.1a.178.178 0 0 1 .32 0l.634 1.285a.18.18 0 0 0 .134.098l1.42.206a.18.18 0 0 1 .098.303L9.42 6.993a.18.18 0 0 0-.051.158l.242 1.414a.178.178 0 0 1-.258.187l-1.27-.668a.18.18 0 0 0-.165 0l-1.27.668a.178.178 0 0 1-.257-.187l.242-1.414a.18.18 0 0 0-.05-.158l-1.03-1.001a.178.178 0 0 1 .098-.303l1.42-.206a.18.18 0 0 0 .134-.098z"/><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`
+            : html`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bookmark-star w-5 h-5 text-gray-400" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/></svg>`;
+        const scopeButton = html`<button ${act('openScopeModal', repo.RepositoryArn, encodeURIComponent(scopeComment))} title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
 
-
-        tableHtml += `
-            <tr class="${rowClass}">
-                <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
-                <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600">${repo.Region}</td>
-                <td class="px-4 py-4 align-top text-sm font-medium text-gray-800 break-words">${repo.RepositoryName}</td>
-                <td class="px-4 py-4 align-top text-xs font-mono text-gray-500 break-all">${repo.RepositoryArn}</td>
-                <td class="px-4 py-4 align-top whitespace-nowrap text-sm font-mono text-gray-600">${repo.EncryptionType}</td>
-                <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${lifecyclePolicyStatus}</td>
-                <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${signingProfile}</td>
-                <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${policyButton}</td>
-                <td class="px-4 py-4 align-top text-sm">${recommendationBadge}</td>
-            </tr>
-        `;
+        return html`<tr class="${rowClass}">
+            <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
+            <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600">${repo.Region}</td>
+            <td class="px-4 py-4 align-top text-sm font-medium text-gray-800 break-words">${repo.RepositoryName}</td>
+            <td class="px-4 py-4 align-top text-xs font-mono text-gray-500 break-all">${repo.RepositoryArn}</td>
+            <td class="px-4 py-4 align-top whitespace-nowrap text-sm font-mono text-gray-600">${repo.EncryptionType}</td>
+            <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${lifecyclePolicyStatus}</td>
+            <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${signingProfile}</td>
+            <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${policyButton}</td>
+            <td class="px-4 py-4 align-top text-sm">${recommendationBadge}</td>
+        </tr>`;
     });
-    tableHtml += '</tbody></table></div>';
-    return tableHtml;
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Repository</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Repository ARN</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Encryption</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lifecycle Policy</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Signing Profile</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Repository Policy</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recommendations</th>
+    </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`;
 };
 
 
-
 const createEcrSecurityHubHtml = () => {
-    return `
+    return html`
         <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
             <h3 class="font-bold text-lg mb-4 text-[#204071]">Active Security Findings (ECR)</h3>
             <div id="sh-ecr-findings-container" class="overflow-x-auto"></div>
@@ -368,19 +314,19 @@ const createEcrSecurityHubHtml = () => {
 
 const createSecurityStatusBadge = (value, isSecure, type = 'default') => {
     if (type === 'public') {
-        // Para acceso público: YES es rojo (malo), NO es verde (bueno)
-        return isSecure ? 
-            '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">NO</span>' :
-            '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">YES</span>';
+        // For public access, YES is bad and NO is good.
+        return isSecure
+            ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">NO</span>`
+            : html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">YES</span>`;
     } else if (type === 'mutability') {
-        // Para mutabilidad: IMMUTABLE es verde (bueno), MUTABLE es rojo (malo)
-        return isSecure ?
-            '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">IMMUTABLE</span>' :
-            '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">MUTABLE</span>';
+        // For mutability, IMMUTABLE is good and MUTABLE is bad.
+        return isSecure
+            ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">IMMUTABLE</span>`
+            : html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">MUTABLE</span>`;
     } else {
-        // Para otras configuraciones: Enabled/Yes es verde (bueno), Disabled/No es rojo (malo)
-        return isSecure ?
-            `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">${value}</span>` :
-            `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">${value}</span>`;
+        // For other configurations, Enabled/Yes is good and Disabled/No is bad.
+        return isSecure
+            ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">${value}</span>`
+            : html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">${value}</span>`;
     }
 };

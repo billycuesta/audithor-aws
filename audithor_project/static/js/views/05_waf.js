@@ -5,6 +5,7 @@
 
 // Importamos las funciones de utilidad que vamos a necesitar desde el fichero utils.js
 import { handleTabClick, renderSecurityHubFindings, createStatusBadge } from '../utils.js';
+import { html, join, setHtml } from '../safe_html.js';
 
 // --- SERVICE DESCRIPTIONS ---
 const serviceDescriptions = {
@@ -39,19 +40,17 @@ export function buildWafView() {
     const { acls, ip_sets } = window.wafApiData.results;
     const wafFindings = window.securityHubApiData.results.findings.wafFindings;
 
-    container.innerHTML = `
+    setHtml(container, html`
         <header class="flex justify-between items-center mb-6">
             <div>
                 <h2 class="text-2xl font-bold text-[#204071]">WAF & Shield</h2>
                 <p class="text-sm text-gray-500">${window.wafApiData.metadata.executionDate}</p>
             </div>
         </header>
-        
         <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
             <h3 class="text-sm font-semibold text-blue-800 mb-2">Audit Guidance</h3>
             <p class="text-sm text-blue-700">Review WAF configurations to ensure comprehensive web application protection, verify logging and monitoring capabilities are properly configured, and validate that rule sets provide adequate coverage against common web exploits while maintaining legitimate traffic flow.</p>
         </div>
-        
         <div class="border-b border-gray-200 mb-6">
             <nav class="-mb-px flex flex-wrap space-x-6" id="waf-tabs">
                 <a href="#" data-tab="waf-summary-content" class="tab-link py-3 px-1 border-b-2 border-[#eb3496] text-[#eb3496] font-semibold text-sm">Summary</a>
@@ -72,7 +71,7 @@ export function buildWafView() {
             </div>
             <div id="waf-sh-content" class="waf-tab-content hidden">${createWafSecurityHubHtml()}</div>
         </div>
-    `;
+    `);
     
     updateWafSummaryCards(acls, ip_sets, wafFindings);
     renderSecurityHubFindings(wafFindings, 'sh-waf-findings-container', 'No Security Hub findings related to WAF were found.');
@@ -83,7 +82,7 @@ export function buildWafView() {
 
 // --- SERVICE DESCRIPTION RENDERER ---
 const renderServiceDescription = (serviceInfo) => {
-    return `
+    return html`
         <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
             <h3 class="text-lg font-semibold text-gray-800 mb-3">${serviceInfo.title}</h3>
             <div class="space-y-3">
@@ -107,7 +106,7 @@ const renderServiceDescription = (serviceInfo) => {
 // --- Funciones internas de la vista WAF (no necesitan export porque solo se usan aquí) ---
 
 function createWafSummaryCardsHtml() {
-    return `
+    return html`
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div class="bg-white border border-gray-100 p-5 rounded-xl shadow-sm">
                 <div class="flex items-center">
@@ -195,10 +194,10 @@ function updateWafSummaryCards(acls, ipSets, wafFindings) {
         
         const loggingDetails = document.createElement('div');
         loggingDetails.className = 'logging-details text-xs text-gray-500 mt-1';
-        loggingDetails.innerHTML = `
+        setHtml(loggingDetails, html`
             <div>All: ${allLoggingEnabled}</div>
             <div>Destination Only: ${destinationOnlyEnabled}</div>
-        `;
+        `);
         loggingElement.parentElement.appendChild(loggingDetails);
     }
     
@@ -220,7 +219,7 @@ function updateWafTopRulesChart(acls) {
     });
     const sortedRules = Object.entries(ruleCounts).sort(([, a], [, b]) => b - a).slice(0, 5);
     if (sortedRules.length === 0) {
-        ctx.parentElement.innerHTML = '<div class="flex items-center justify-center h-full text-center text-gray-500"><p>No blocked requests found in the last 30 days.</p></div>';
+        setHtml(ctx.parentElement, html`<div class="flex items-center justify-center h-full text-center text-gray-500"><p>No blocked requests found in the last 30 days.</p></div>`);
         return;
     }
     const labels = sortedRules.map(item => item[0]);
@@ -248,115 +247,84 @@ function updateWafTopRulesChart(acls) {
 }
 
 function createWafSecurityHubHtml() {
-    return `<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><h3 class="font-bold text-lg mb-4 text-[#204071]">Active Security Findings (WAF)</h3><div id="sh-waf-findings-container" class="overflow-x-auto"></div></div>`;
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><h3 class="font-bold text-lg mb-4 text-[#204071]">Active Security Findings (WAF)</h3><div id="sh-waf-findings-container" class="overflow-x-auto"></div></div>`;
 }
 
 function renderWafAclsTable(acls) {
     if (!acls || acls.length === 0) {
-        return `
-            <div class="bg-white p-6 rounded-xl border border-gray-100">
-                <div class="text-center">
-                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <h3 class="mt-2 text-sm font-medium text-gray-900">No Web ACLs found</h3>
-                    <p class="mt-1 text-sm text-gray-500">This account does not have WAF Web ACLs configured, which may leave web applications vulnerable to common attacks.</p>
-                </div>
-            </div>
-        `;
+        return html`<div class="bg-white p-6 rounded-xl border border-gray-100"><div class="text-center">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No Web ACLs found</h3>
+            <p class="mt-1 text-sm text-gray-500">This account does not have WAF Web ACLs configured, which may leave web applications vulnerable to common attacks.</p>
+        </div></div>`;
     }
-    
-    return `
-        <div class="space-y-6">
-            ${renderLoggingConfigurationGuide()}
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">All Logging</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Destination Only</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sampled Requests</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Protected Resources</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        ${acls.sort((a,b) => a.Name.localeCompare(b.Name)).map(acl => renderWafAclRow(acl)).join('')}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    `;
+
+    const rows = [...acls].sort((a, b) => a.Name.localeCompare(b.Name)).map(acl => renderWafAclRow(acl));
+    return html`<div class="space-y-6">
+        ${renderLoggingConfigurationGuide()}
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50"><tr>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">All Logging</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Destination Only</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sampled Requests</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Protected Resources</th>
+            </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody>
+        </table></div>
+    </div>`;
 }
 
 function renderWafAclRow(acl) {
-    // Resources HTML
-    let resourcesHtml = '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">No associated resources</span>';
+    let resourcesHtml = html`<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">No associated resources</span>`;
 
     if (acl.Version === 'Classic') {
-        resourcesHtml = `<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800" title="La API de WAF Classic no permite listar recursos asociados directamente. Revisa manualmente en la consola.">Revisión Manual Requerida</span>`;
-    } 
-    // --- FIN DE LA MODIFICACIÓN ---
-    else if (acl.AssociatedResourceArns && acl.AssociatedResourceArns.length > 0) {
-        resourcesHtml = `<div class="flex flex-col space-y-1">` + 
-            acl.AssociatedResourceArns.map(arn => 
-                `<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 font-mono">${arn}</span>`
-            ).join('') + `</div>`;
+        resourcesHtml = html`<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800" title="La API de WAF Classic no permite listar recursos asociados directamente. Revisa manualmente en la consola.">Revisión Manual Requerida</span>`;
+    }
+    if (acl.AssociatedResourceArns && acl.AssociatedResourceArns.length > 0) {
+        const resources = acl.AssociatedResourceArns.map(arn => html`<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 font-mono">${arn}</span>`);
+        resourcesHtml = html`<div class="flex flex-col space-y-1">${join(resources)}</div>`;
     }
 
-    if (acl.AssociatedResourceArns && acl.AssociatedResourceArns.length > 0) {
-        resourcesHtml = `<div class="flex flex-col space-y-1">` + 
-            acl.AssociatedResourceArns.map(arn => 
-                `<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 font-mono">${arn}</span>`
-            ).join('') + `</div>`;
-    }
-    
-    // Logging configuration HTML
     const loggingDetails = acl.LoggingDetails || {
         all_logging: { enabled: false, destinations: [] },
         destination_only_logging: { enabled: false, destinations: [] }
     };
-    
-    let allLoggingHtml = createLoggingStatusBadge(loggingDetails.all_logging);
-    let destinationOnlyHtml = createLoggingStatusBadge(loggingDetails.destination_only_logging);
-    
-    // Sampled requests con colores apropiados
+    const allLoggingHtml = createLoggingStatusBadge(loggingDetails.all_logging);
+    const destinationOnlyHtml = createLoggingStatusBadge(loggingDetails.destination_only_logging);
     const sampledEnabled = acl.VisibilityConfig ? acl.VisibilityConfig.SampledRequestsEnabled : false;
-    const sampledBadge = sampledEnabled ? 
-        '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Enabled</span>' :
-        '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Disabled</span>';
-    
-    return `
-        <tr class="hover:bg-gray-50">
-            <td class="px-4 py-4 align-top whitespace-nowrap text-sm font-medium text-gray-800">${acl.Name}</td>
-            <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600">${acl.Scope}</td>
-            <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600">${acl.Region}</td>
-            <td class="px-4 py-4 align-top text-sm">${allLoggingHtml}</td>
-            <td class="px-4 py-4 align-top text-sm">${destinationOnlyHtml}</td>
-            <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${sampledBadge}</td>
-            <td class="px-4 py-4 align-top text-sm">${resourcesHtml}</td>
-        </tr>
-    `;
+    const sampledBadge = sampledEnabled
+        ? html`<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Enabled</span>`
+        : html`<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Disabled</span>`;
+
+    return html`<tr class="hover:bg-gray-50">
+        <td class="px-4 py-4 align-top whitespace-nowrap text-sm font-medium text-gray-800">${acl.Name}</td>
+        <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600">${acl.Scope}</td>
+        <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600">${acl.Region}</td>
+        <td class="px-4 py-4 align-top text-sm">${allLoggingHtml}</td>
+        <td class="px-4 py-4 align-top text-sm">${destinationOnlyHtml}</td>
+        <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${sampledBadge}</td>
+        <td class="px-4 py-4 align-top text-sm">${resourcesHtml}</td>
+    </tr>`;
 }
 
 function createLoggingStatusBadge(loggingConfig) {
     if (!loggingConfig.enabled) {
-        return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Disabled</span>';
+        return html`<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Disabled</span>`;
     }
-    
+
     if (loggingConfig.destinations && loggingConfig.destinations.length > 0) {
         const destination = loggingConfig.destinations[0];
         const destinationName = destination.split('/').pop();
-        return `<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 font-mono" title="${destination}">${destinationName}</span>`;
+        return html`<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 font-mono" title="${destination}">${destinationName}</span>`;
     }
-    
-    return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Enabled (No Destination)</span>';
+
+    return html`<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Enabled (No Destination)</span>`;
 }
 
 function renderLoggingConfigurationGuide() {
-    return `
+    return html`
         <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
             <h3 class="text-lg font-semibold text-blue-800 mb-4">WAF Logging Configuration Types</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -404,26 +372,29 @@ function renderLoggingConfigurationGuide() {
     `;
 }
 
-function renderWafIpSetsTable(ipSets) { 
+function renderWafIpSetsTable(ipSets) {
     if (!ipSets || ipSets.length === 0) {
-        return `
-            <div class="bg-white p-6 rounded-xl border border-gray-100">
-                <div class="text-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="mx-auto h-12 w-12 text-gray-400" viewBox="0 0 16 16">
-                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
-                        <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286m1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94"/>
-                    </svg>
-                    <h3 class="mt-2 text-sm font-medium text-gray-900">No IP Sets found</h3>
-                    <p class="mt-1 text-sm text-gray-500">This account does not have WAF IP Sets configured. Consider creating IP sets for better management of allow/block lists.</p>
-                </div>
-            </div>
-        `;
+        return html`<div class="bg-white p-6 rounded-xl border border-gray-100"><div class="text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="mx-auto h-12 w-12 text-gray-400" viewBox="0 0 16 16">
+                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+                <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286m1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94"/>
+            </svg><h3 class="mt-2 text-sm font-medium text-gray-900">No IP Sets found</h3>
+            <p class="mt-1 text-sm text-gray-500">This account does not have WAF IP Sets configured. Consider creating IP sets for better management of allow/block lists.</p>
+        </div></div>`;
     }
-    
-    let table = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Version</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"># Addresses</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">'; 
-    ipSets.sort((a,b) => a.Name.localeCompare(b.Name)).forEach(ipSet => { 
-        table += `<tr class="hover:bg-gray-50"><td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${ipSet.Name}</td><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${ipSet.Scope}</td><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${ipSet.Region}</td><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${ipSet.IPAddressVersion}</td><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${ipSet.AddressCount}</td></tr>`; 
-    }); 
-    table += '</tbody></table></div>'; 
-    return table; 
+
+    const rows = [...ipSets].sort((a, b) => a.Name.localeCompare(b.Name)).map(ipSet => html`<tr class="hover:bg-gray-50">
+        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${ipSet.Name}</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${ipSet.Scope}</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${ipSet.Region}</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${ipSet.IPAddressVersion}</td>
+        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${ipSet.AddressCount}</td>
+    </tr>`);
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Version</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"># Addresses</th>
+    </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`;
 }
