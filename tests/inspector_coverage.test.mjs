@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const source = readFileSync(new URL('../audithor_project/static/js/collection.js', import.meta.url), 'utf8');
+const { mergeInspectorCoverage } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const status = { status: 'complete', coverageKnown: true, units: [{ service: 'inspector2', operation: 'status', status: 'complete' }] };
+const findings = { status: 'partial', coverageKnown: true, units: [{ service: 'inspector2', operation: 'findings', status: 'partial' }] };
+const failed = { ...findings, coverageKnown: false, units: [...findings.units, { service: 'inspector2', operation: 'findings_api_request', status: 'failed', category: 'api_error' }] };
+const statusSnapshot = structuredClone(status);
+const afterFailure = mergeInspectorCoverage(statusSnapshot, failed);
+assert.deepEqual(statusSnapshot, status);
+const afterRetry = mergeInspectorCoverage(statusSnapshot, findings);
+assert.deepEqual(afterRetry, mergeInspectorCoverage(status, findings));
+assert.equal(afterFailure.coverageKnown, false);
+assert.equal(afterRetry.coverageKnown, true);
+assert.deepEqual(afterRetry.units, [...status.units, ...findings.units]);
+console.log('Inspector coverage merge checks passed');

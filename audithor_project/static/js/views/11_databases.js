@@ -1,3 +1,4 @@
+import { renderCollectionNotice, emptyCollectionMessage } from '../collection.js';
 /**
  * 11_databases.js
  * Contains all logic for building and rendering the Databases view.
@@ -91,6 +92,7 @@ export const buildDatabasesView = () => {
             </div>
         </div>
     `;
+    renderCollectionNotice(container, window.databasesApiData);
     
     updateDatabasesSummaryCards(rds_instances, aurora_clusters, dynamodb_tables, documentdb_clusters);
     
@@ -168,6 +170,7 @@ const renderServiceDescription = (serviceInfo) => {
 };
 
 const createEncryptionBadge = (isEncrypted) => {
+    if (isEncrypted == null) return `<span class="text-gray-500">UNKNOWN</span>`;
     return isEncrypted
         ? `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">YES</span>`
         : `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">NO</span>`;
@@ -183,7 +186,7 @@ const updateDatabasesSummaryCards = (rds, aurora, dynamodb, docdb) => {
 // ===== RDS =====
 const renderRdsTable = (instances) => {
     if (!instances || instances.length === 0)
-        return '<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No standalone RDS instances were found.</p></div>';
+        return `<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">${emptyCollectionMessage(window.databasesApiData, "No standalone RDS instances were found.")}</p></div>`;
     
     let table = `
       <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
@@ -204,11 +207,17 @@ const renderRdsTable = (instances) => {
           <tbody class="bg-white divide-y divide-gray-200">`;
     
     instances.forEach(i => {
+        const region = i.Region ?? 'Unknown';
+        const identifier = i.DBInstanceIdentifier ?? 'Unknown';
+        const engine = i.Engine ?? 'Unknown';
+        const status = i.DBInstanceStatus ?? 'Unknown';
+        const kmsKeyAlias = i.KmsKeyAlias ?? 'Unknown';
+        const arn = i.ARN ?? '';
         const publicBadge = i.PubliclyAccessible
             ? `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">YES</span>`
             : `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">NO</span>`;
 
-        const scopeDetails = window.scopedResources[i.ARN];
+        const scopeDetails = window.scopedResources[arn];
         const isScoped = !!scopeDetails;
         const rowClass = isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50';
         const scopeComment = isScoped ? scopeDetails.comment : '';
@@ -221,20 +230,20 @@ const renderRdsTable = (instances) => {
                  <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/>
                </svg>`;
 
-        const scopeButton = `<button onclick="openScopeModal('${i.ARN}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
+        const scopeButton = `<button onclick="openScopeModal('${arn}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
 
         table += `
           <tr class="${rowClass}">
             <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${i.Region}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${i.DBInstanceIdentifier}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${i.Engine}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(i.DBInstanceStatus)}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${region}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${identifier}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${engine}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(status)}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm">${publicBadge}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm">${createEncryptionBadge(i.Encrypted)}</td>
-            <td class="px-4 py-4 text-sm text-gray-600 font-mono break-all">${i.KmsKeyAlias}</td>
+            <td class="px-4 py-4 text-sm text-gray-600 font-mono break-all">${kmsKeyAlias}</td>
             <td class="px-4 py-4 text-center">
-              <button onclick="copyToClipboard(this, '${i.ARN}')" title="${i.ARN}" class="p-1 rounded-md hover:bg-gray-200 transition">
+              <button onclick="copyToClipboard(this, '${arn}')" title="${arn}" class="p-1 rounded-md hover:bg-gray-200 transition">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard w-5 h-5 text-gray-500" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
               </button>
             </td>
@@ -247,7 +256,7 @@ const renderRdsTable = (instances) => {
 // ===== AURORA =====
 const renderAuroraTable = (clusters) => {
     if (!clusters || clusters.length === 0)
-        return '<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No Aurora clusters were found.</p></div>';
+        return `<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">${emptyCollectionMessage(window.databasesApiData, "No Aurora clusters were found.")}</p></div>`;
     
     let table = `
       <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
@@ -266,7 +275,12 @@ const renderAuroraTable = (clusters) => {
           <tbody class="bg-white divide-y divide-gray-200">`;
 
     clusters.forEach(c => {
-        const scopeDetails = window.scopedResources[c.ARN];
+        const region = c.Region ?? 'Unknown';
+        const identifier = c.ClusterIdentifier ?? 'Unknown';
+        const status = c.Status ?? 'Unknown';
+        const kmsKeyAlias = c.KmsKeyAlias ?? 'Unknown';
+        const arn = c.ARN ?? '';
+        const scopeDetails = window.scopedResources[arn];
         const isScoped = !!scopeDetails;
         const rowClass = isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50';
         const scopeComment = isScoped ? scopeDetails.comment : '';
@@ -279,18 +293,18 @@ const renderAuroraTable = (clusters) => {
                  <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/>
                </svg>`;
 
-        const scopeButton = `<button onclick="openScopeModal('${c.ARN}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
+        const scopeButton = `<button onclick="openScopeModal('${arn}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
 
         table += `
           <tr class="${rowClass}">
             <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${c.Region}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${c.ClusterIdentifier}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(c.Status)}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${region}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${identifier}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(status)}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm">${createEncryptionBadge(c.Encrypted)}</td>
-            <td class="px-4 py-4 text-sm text-gray-600 font-mono break-all">${c.KmsKeyAlias}</td>
+            <td class="px-4 py-4 text-sm text-gray-600 font-mono break-all">${kmsKeyAlias}</td>
             <td class="px-4 py-4 text-center">
-              <button onclick="copyToClipboard(this, '${c.ARN}')" title="${c.ARN}" class="p-1 rounded-md hover:bg-gray-200 transition">
+              <button onclick="copyToClipboard(this, '${arn}')" title="${arn}" class="p-1 rounded-md hover:bg-gray-200 transition">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard w-5 h-5 text-gray-500" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
               </button>
             </td>
@@ -304,7 +318,7 @@ const renderAuroraTable = (clusters) => {
 // ===== DYNAMODB =====
 const renderDynamoDbTable = (tables) => {
     if (!tables || tables.length === 0)
-        return '<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No DynamoDB tables were found.</p></div>';
+        return `<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">${emptyCollectionMessage(window.databasesApiData, "No DynamoDB tables were found.")}</p></div>`;
     
     let table = `
       <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
@@ -322,7 +336,8 @@ const renderDynamoDbTable = (tables) => {
           <tbody class="bg-white divide-y divide-gray-200">`;
 
     tables.forEach(t => {
-        const scopeDetails = window.scopedResources[t.ARN];
+        const scopeKey = t.ARN || `dynamodb:${t.Region}:${t.TableName}`;
+        const scopeDetails = window.scopedResources[scopeKey];
         const isScoped = !!scopeDetails;
         const rowClass = isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50';
         const scopeComment = isScoped ? scopeDetails.comment : '';
@@ -335,7 +350,7 @@ const renderDynamoDbTable = (tables) => {
                  <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/>
                </svg>`;
 
-        const scopeButton = `<button onclick="openScopeModal('${t.ARN}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
+        const scopeButton = `<button onclick="openScopeModal('${scopeKey}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
 
         table += `
           <tr class="${rowClass}">
@@ -343,9 +358,9 @@ const renderDynamoDbTable = (tables) => {
             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${t.Region}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${t.TableName}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm">${createEncryptionBadge(t.Encrypted)}</td>
-            <td class="px-4 py-4 text-sm text-gray-600 font-mono break-all">${t.KmsKeyAlias}</td>
+            <td class="px-4 py-4 text-sm text-gray-600 font-mono break-all">${t.KmsKeyAlias ?? "Unknown"}</td>
             <td class="px-4 py-4 text-center">
-              <button onclick="copyToClipboard(this, '${t.ARN}')" title="${t.ARN}" class="p-1 rounded-md hover:bg-gray-200 transition">
+              <button ${t.ARN ? `onclick="copyToClipboard(this, '${t.ARN}')" title="${t.ARN}"` : 'disabled title="ARN is unavailable"'} class="p-1 rounded-md hover:bg-gray-200 transition">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard w-5 h-5 text-gray-500" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
               </button>
             </td>
@@ -359,7 +374,7 @@ const renderDynamoDbTable = (tables) => {
 // ===== DOCUMENTDB =====
 const renderDocumentDbTable = (clusters) => {
     if (!clusters || clusters.length === 0)
-        return '<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No DocumentDB clusters were found.</p></div>';
+        return `<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">${emptyCollectionMessage(window.databasesApiData, "No DocumentDB clusters were found.")}</p></div>`;
     
     let table = `
       <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
@@ -378,7 +393,12 @@ const renderDocumentDbTable = (clusters) => {
           <tbody class="bg-white divide-y divide-gray-200">`;
 
     clusters.forEach(c => {
-        const scopeDetails = window.scopedResources[c.ARN];
+        const region = c.Region ?? 'Unknown';
+        const identifier = c.ClusterIdentifier ?? 'Unknown';
+        const status = c.Status ?? 'Unknown';
+        const kmsKeyAlias = c.KmsKeyAlias ?? 'Unknown';
+        const arn = c.ARN ?? '';
+        const scopeDetails = window.scopedResources[arn];
         const isScoped = !!scopeDetails;
         const rowClass = isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50';
         const scopeComment = isScoped ? scopeDetails.comment : '';
@@ -391,18 +411,18 @@ const renderDocumentDbTable = (clusters) => {
                  <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1z"/>
                </svg>`;
 
-        const scopeButton = `<button onclick="openScopeModal('${c.ARN}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
+        const scopeButton = `<button onclick="openScopeModal('${arn}', '${encodeURIComponent(scopeComment)}')" title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
 
         table += `
           <tr class="${rowClass}">
             <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${c.Region}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${c.ClusterIdentifier}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(c.Status)}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${region}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${identifier}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(status)}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm">${createEncryptionBadge(c.Encrypted)}</td>
-            <td class="px-4 py-4 text-sm text-gray-600 font-mono break-all">${c.KmsKeyAlias}</td>
+            <td class="px-4 py-4 text-sm text-gray-600 font-mono break-all">${kmsKeyAlias}</td>
             <td class="px-4 py-4 text-center">
-              <button onclick="copyToClipboard(this, '${c.ARN}')" title="${c.ARN}" class="p-1 rounded-md hover:bg-gray-200 transition">
+              <button onclick="copyToClipboard(this, '${arn}')" title="${arn}" class="p-1 rounded-md hover:bg-gray-200 transition">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard w-5 h-5 text-gray-500" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
               </button>
             </td>

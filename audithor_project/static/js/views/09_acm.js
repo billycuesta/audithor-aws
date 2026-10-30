@@ -1,3 +1,4 @@
+import { renderCollectionNotice, emptyCollectionMessage, coverageIsComplete } from '../collection.js';
 /**
  * 09_acm.js
  * Contains all logic for building and rendering the AWS Certificate Manager (ACM) view.
@@ -31,13 +32,13 @@ const serviceDescriptions = {
 // --- MAIN VIEW FUNCTION (EXPORTED) ---
 export const buildAcmView = () => {
     const container = document.getElementById('acm-view');
-    if (!window.acmApiData || !window.securityHubApiData) return;
+    if (!container || !window.acmApiData) return;
 
     
     const activeTabEl = container.querySelector('#acm-tabs .border-\\[\\#eb3496\\]');
     const activeTabData = activeTabEl ? activeTabEl.dataset.tab : 'acm-summary-content';
     const { certificates } = window.acmApiData.results;
-    const acmSecurityHubFindings = window.securityHubApiData.results.findings.cloudwatchFindings.filter(f => f.Title.includes('Certificate') || f.Title.includes('SSL') || f.Title.includes('TLS'));
+    const acmSecurityHubFindings = (window.securityHubApiData?.results?.findings?.cloudwatchFindings || []).filter(f => f.Title.includes('Certificate') || f.Title.includes('SSL') || f.Title.includes('TLS'));
 
     container.innerHTML = `
         <header class="flex justify-between items-center mb-6">
@@ -73,9 +74,10 @@ export const buildAcmView = () => {
             <div id="acm-sh-content" class="acm-tab-content hidden">${createAcmSecurityHubHtml()}</div>
         </div>
     `;
+    renderCollectionNotice(container, window.acmApiData);
     
     updateAcmSummaryCards(certificates, acmSecurityHubFindings);
-    renderSecurityHubFindings(acmSecurityHubFindings, 'sh-acm-findings-container', 'No Security Hub findings related to ACM were found.');
+    renderSecurityHubFindings(acmSecurityHubFindings, 'sh-acm-findings-container', window.securityHubApiData ? 'No Security Hub findings related to ACM were found.' : 'Security Hub data unavailable; related findings could not be assessed.');
 
     // Si no es la pestaña por defecto, cambiar la vista activa
     if (activeTabData !== 'acm-summary-content') {
@@ -155,8 +157,8 @@ const renderAcmCertificatesTable = (certificates) => {
                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <h3 class="mt-2 text-sm font-medium text-gray-900">No ACM certificates found</h3>
-                    <p class="mt-1 text-sm text-gray-500">This account does not have SSL/TLS certificates managed through ACM, which may indicate manual certificate management or use of third-party providers.</p>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">${emptyCollectionMessage(window.acmApiData, "No ACM certificates found")}</h3>
+                    <p class="mt-1 text-sm text-gray-500">${coverageIsComplete(window.acmApiData) ? 'This account does not have SSL/TLS certificates managed through ACM, which may indicate manual certificate management or use of third-party providers.' : 'Review the collection details above to see which checks failed.'}</p>
                 </div>
             </div>
         `;
@@ -365,6 +367,11 @@ const renderLifecycleRecommendations = (certificates, expiringSoon, expiringIn90
         });
     }
     
+    if (!coverageIsComplete(window.acmApiData)) {
+        recommendations.push({type: 'warning', title: 'Assessment incomplete',
+            message: 'Failed or unverified checks prevent a complete certificate assessment.',
+            action: 'Review collection diagnostics and repeat the affected checks.'});
+    }
     if (recommendations.length === 0) {
         recommendations.push({
             type: 'success',

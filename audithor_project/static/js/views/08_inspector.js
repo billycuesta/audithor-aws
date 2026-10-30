@@ -1,3 +1,4 @@
+import { renderCollectionNotice, emptyCollectionMessage, coverageIsComplete, mergeInspectorCoverage } from '../collection.js';
 /**
  * 08_inspector.js
  * Contains all logic for building and rendering the AWS Inspector view.
@@ -48,6 +49,7 @@ export const buildInspectorView = () => {
             </div>
             <div id="inspector-results-view" class="hidden mt-6"></div>
         `;
+        renderCollectionNotice(container, window.inspectorApiData);
 
         document.getElementById('inspector-status-content').innerHTML = renderInspectorStatusTable(scanStatus);
         document.getElementById('run-deep-inspector-scan-btn').addEventListener('click', runDeepInspectorAnalysis);
@@ -103,28 +105,47 @@ const runDeepInspectorAnalysis = async () => {
         const inspectorFindingsEndpoint = window.CONSTANTS?.API?.RUN_INSPECTOR_FINDINGS || `${window.location.origin}/api/run-inspector-findings-audit`;
         const response = await fetch(inspectorFindingsEndpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...(window.activeScanId ? { 'X-Scan-Id': window.activeScanId } : {}) },
             body: JSON.stringify(payload)
         });
         const findingsData = await response.json();
         if (!response.ok) throw new Error(findingsData.error || 'Server error');
 
         window.inspectorApiData.results.findings = findingsData.results.findings || [];
+        window.inspectorApiData.results.findingsStatus = findingsData.results.findingsStatus;
+        // Preserve the original status scan before any findings attempt can overwrite merged coverage.
+        window.inspectorApiData.results._statusCollection ??= window.inspectorApiData.results._collection;
+        window.inspectorApiData.results._collection = mergeInspectorCoverage(
+            window.inspectorApiData.results._statusCollection, findingsData.results._collection
+        );
         
         const inspectorFindingsSH = window.securityHubApiData ? window.securityHubApiData.results.findings.inspectorFindings : [];
 
         renderFullInspectorView(window.inspectorApiData.results.findings, inspectorFindingsSH);
 
-        log('Deep Inspector analysis results rendered.', 'success');
+        log(coverageIsComplete(window.inspectorApiData)
+            ? 'Deep Inspector analysis results rendered.'
+            : 'Deep Inspector analysis results rendered with incomplete coverage; review collection details.',
+        coverageIsComplete(window.inspectorApiData) ? 'success' : 'warning');
 
+        // Evaluate collected findings even when optional collection coverage is incomplete.
         if (window.runAndDisplayHealthyStatus) {
             window.runAndDisplayHealthyStatus();
         }
 
     } catch(e) {
+        window.inspectorApiData.results.findingsStatus = 'failed';
+        window.inspectorApiData.results._statusCollection ??= window.inspectorApiData.results._collection;
+        window.inspectorApiData.results._collection = mergeInspectorCoverage(
+            window.inspectorApiData.results._statusCollection,
+            { status: 'partial', coverageKnown: false, units: [
+                { service: 'inspector2', operation: 'findings_api_request', status: 'failed', category: 'api_error' }
+            ] }
+        );
+        renderCollectionNotice(document.getElementById('inspector-view'), window.inspectorApiData);
         log(`Error in deep Inspector search: ${e.message}`, 'error');
         if(errorContainer) {
-            errorContainer.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-lg mt-4"><h4 class="font-bold">Error</h4><p>${e.message}</p></div>`;
+            errorContainer.textContent = `Inspector findings search failed: ${e.message}`;
             errorContainer.classList.remove('hidden');
         }
     } finally {
@@ -169,7 +190,7 @@ const createInspectorSummaryCardsHtml = () => `
     </div>`;
 
 const updateInspectorSummaryCards = (scanStatus, findings) => {
-    document.getElementById('inspector-active-regions').textContent = scanStatus.length;
+    document.getElementById('inspector-active-regions').textContent = scanStatus.filter(s => ['ENABLED', 'ENABLING'].includes(s.InspectorStatus)).length;
     let scannedResourceCount = 0;
     scanStatus.forEach(regionStatus => {
         if (regionStatus.ScanEC2 === 'ENABLED') scannedResourceCount++;
@@ -183,7 +204,7 @@ const updateInspectorSummaryCards = (scanStatus, findings) => {
 };
 
 const renderInspectorStatusTable = (statusList) => {
-    if (!statusList || statusList.length === 0) return '<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">Inspector is not enabled in any region.</p></div>';
+    if (!statusList || statusList.length === 0) return `<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">${emptyCollectionMessage(window.inspectorApiData, "No Inspector status records returned for the planned scope.")}</p></div>`;
     let table = '<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>' +
                 '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>' +
                 '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Inspector Status</th>' +
@@ -411,6 +432,7 @@ const renderFullInspectorView = (findings, inspectorFindingsSH) => {
             <div id="inspector-sh-content" class="inspector-tab-content hidden"></div>
         </div>
     `;
+    renderCollectionNotice(container, window.inspectorApiData);
 
     document.getElementById('inspector-status-details-content').innerHTML = renderInspectorStatusTable(scanStatus);
     updateInspectorSummaryCards(scanStatus, findings);
