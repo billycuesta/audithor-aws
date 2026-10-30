@@ -13,7 +13,7 @@ import shutil
 import boto3
 
 # Importa el motor de reglas (sin cambios)
-from rules import RULES_TO_CHECK
+from rules import RULES_TO_CHECK, coverage_gaps
 from collectors.network_policies import get_network_details_table
 from collectors import secrets_manager
 from botocore.exceptions import BotoCoreError, ClientError
@@ -351,6 +351,7 @@ def run_executive_summary():
         check_function = rule.get("check_function")
         if callable(check_function):
             violating_resources_raw = check_function(audit_data)
+            gaps = coverage_gaps(audit_data, rule.get("data_sources", []))
             if violating_resources_raw:
                 affected_resources_structured = []
                 for resource in violating_resources_raw:
@@ -371,7 +372,16 @@ def run_executive_summary():
                     "remediation": rule.get("remediation"), "status": "🚩 RED FLAG",
                     "affected_resources": affected_resources_structured
                 }
+                if gaps:
+                    finding["coverage"] = gaps
                 executive_summary_findings.append(finding)
+            elif gaps:
+                executive_summary_findings.append({
+                    "rule_id": rule.get("rule_id"), "name": rule.get("name"),
+                    "severity": rule.get("severity"), "description": rule.get("description"),
+                    "remediation": rule.get("remediation"), "status": "NOT ASSESSED",
+                    "affected_resources": [], "coverage": gaps
+                })
     return jsonify(executive_summary_findings)
 
 @app.route('/api/run-federation-audit', methods=['POST'])

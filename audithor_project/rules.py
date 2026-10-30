@@ -589,7 +589,7 @@ def check_dynamodb_table_unencrypted(audit_data):
     failing_resources = []
     dynamodb_tables = audit_data.get("databases", {}).get("dynamodb_tables", [])
     for table in dynamodb_tables:
-        if not table.get("Encrypted"):
+        if table.get("Encrypted") is False:
             failing_resources.append({
                 "resource": table.get("TableName"),
                 "region": table.get("Region")
@@ -1380,6 +1380,30 @@ def check_waf_classic_in_use(audit_data):
 # ------------------------------------------------------------------------------
 # 3. Master Rule List
 # ------------------------------------------------------------------------------
+COVERAGE_SERVICES = ("acm", "inspector", "databases")
+
+
+def coverage_gaps(audit_data, data_sources):
+    gaps = []
+    for source in data_sources:
+        if source not in COVERAGE_SERVICES:
+            continue
+        collection = (audit_data.get(source) or {}).get("_collection")
+        if collection is None:
+            continue
+        status = collection.get("status", "unknown")
+        coverage_known = collection.get("coverageKnown", False)
+        if status in ("partial", "failed", "unknown") or not coverage_known:
+            failed_units = [
+                {key: unit.get(key) for key in ("operation", "region", "category")}
+                for unit in collection.get("units", [])
+                if unit.get("status") == "failed"
+            ][:10]
+            gaps.append({"service": source, "status": status,
+                         "coverageKnown": coverage_known, "failedUnits": failed_units})
+    return gaps
+
+
 RULES_TO_CHECK = [
     {
         "rule_id": "IAM_001",
@@ -1549,6 +1573,7 @@ RULES_TO_CHECK = [
         "description": "A resource (such as an EC2 instance) has been detected using an operating system or platform that has reached its 'End of Life' (EOL). This means it no longer receives security updates from the provider, leaving it exposed to known and future vulnerabilities.",
         "remediation": "Migrate the application or service to an instance with a supported operating system or platform that receives security updates. Plan to upgrade resources before they reach their EOL date.",
         "pci_requirement": "PCI DSS 6.3.1",
+        "data_sources": ['inspector'],
         "check_function": check_inspector_platform_eol
     },
     {
@@ -1559,6 +1584,7 @@ RULES_TO_CHECK = [
         "description": "EC2 instances have been detected in a region where Amazon Inspector vulnerability scanning for EC2 is not activated. This represents a security blind spot, as new vulnerabilities in these instances will not be discovered.",
         "remediation": "Access the Amazon Inspector console, go to 'Account settings' -> 'Scan status', and ensure that 'Amazon EC2 scanning' is activated for the affected region.",
         "pci_requirement": "PCI DSS 11.3.1",
+        "data_sources": ['inspector'],
         "check_function": check_inspector_ec2_scanning_disabled
     },
     {
@@ -1569,6 +1595,7 @@ RULES_TO_CHECK = [
         "description": "Lambda functions have been detected in a region where Amazon Inspector vulnerability scanning for Lambda is not activated. This can leave your functions' code and dependencies unscanned for known vulnerabilities.",
         "remediation": "Access the Amazon Inspector console, go to 'Account settings' -> 'Scan status', and ensure that 'Lambda functions scanning' is activated for the affected region.",
         "pci_requirement": "PCI DSS 11.3.1",
+        "data_sources": ['inspector'],
         "check_function": check_inspector_lambda_scanning_disabled
     },
     {
@@ -1579,6 +1606,7 @@ RULES_TO_CHECK = [
         "description": "ECR repositories have been detected in a region where Amazon Inspector container image scanning is not activated. Images can contain vulnerabilities in their operating system or software packages, and not scanning them represents a significant security risk.",
         "remediation": "Access the Amazon Inspector console, go to 'Account settings' -> 'Scan status', and ensure that 'Amazon ECR scanning' is activated for the affected region.",
         "pci_requirement": "PCI DSS 11.3.1",
+        "data_sources": ['inspector', 'ecr'],
         "check_function": check_inspector_ecr_scanning_disabled
     },
     {
@@ -1589,6 +1617,7 @@ RULES_TO_CHECK = [
         "description": "Inspector findings with 'Critical' or 'High' severity have been detected that have not been remediated in over 30 days. This represents a significant and prolonged security risk, indicating a potential gap in the vulnerability and patch management process.",
         "remediation": "Immediately prioritize and remediate these old findings. Review your patch management processes to ensure high-impact vulnerabilities are addressed within an acceptable timeframe (SLA).",
         "pci_requirement": "PCI DSS 6.3.3",
+        "data_sources": ['inspector'],
         "check_function": check_inspector_old_critical_findings
     },
     {
@@ -1659,6 +1688,7 @@ RULES_TO_CHECK = [
         "description": "An RDS database instance has been detected that is configured to be publicly accessible from the Internet. This exposes the database to direct attacks, such as brute-force attempts, SQL injection, or vulnerability exploitation, and significantly increases the risk of a data breach.",
         "remediation": "Navigate to the RDS console, select the affected instance, and click 'Modify'. In the 'Connectivity' section, change the 'Public access' option from 'Yes' to 'No'. Ensure that your resources within the VPC (such as EC2 instances or Lambda functions) have the necessary network connectivity to access the database privately.",
         "pci_requirement": "PCI DSS 1.4.4",
+        "data_sources": ['databases'],
         "check_function": check_rds_publicly_accessible
     },
     {
@@ -1669,6 +1699,7 @@ RULES_TO_CHECK = [
         "description": "An RDS database instance has been detected that does not have storage encryption enabled. This is a critical security gap, especially for PCI DSS compliance, as it leaves sensitive data unprotected on the underlying storage.",
         "remediation": "Encryption must be enabled at the time of instance creation. To remediate this, create a snapshot of the unencrypted instance, copy the snapshot while enabling encryption on the copy, and finally, restore the database from the new encrypted snapshot.",
         "pci_requirement": "PCI DSS 3.5.1",
+        "data_sources": ['databases'],
         "check_function": check_rds_instance_unencrypted
     },
     {
@@ -1679,6 +1710,7 @@ RULES_TO_CHECK = [
         "description": "An Aurora database cluster has been detected that does not have storage encryption enabled. As with RDS, this is a critical risk that exposes data to unauthorized access at the disk level.",
         "remediation": "Encryption for an Aurora cluster is defined at the time of its creation. To fix this finding, it is necessary to create a new cluster with encryption enabled and migrate the data from the unencrypted cluster.",
         "pci_requirement": "PCI DSS 3.5.1",
+        "data_sources": ['databases'],
         "check_function": check_aurora_cluster_unencrypted
     },
     {
@@ -1689,6 +1721,7 @@ RULES_TO_CHECK = [
         "description": "A DynamoDB table has been detected that does not use encryption at rest with a customer-managed key (CMK) or an AWS-managed key (KMS). Although DynamoDB encrypts data by default, using KMS keys provides an additional layer of control and auditability.",
         "remediation": "In the DynamoDB console, select the table, go to the 'Additional settings' tab, and in the 'Encryption at rest' section, change the encryption key to an AWS-managed (KMS) or customer-managed (CMK) key.",
         "pci_requirement": "PCI DSS 3.5.1",
+        "data_sources": ['databases'],
         "check_function": check_dynamodb_table_unencrypted
     },
     {
@@ -1699,6 +1732,7 @@ RULES_TO_CHECK = [
         "description": "A DocumentDB cluster has been detected that does not have storage encryption enabled. This is a critical security risk, as the data on the disk is not protected against unauthorized access.",
         "remediation": "Encryption for DocumentDB must be enabled during cluster creation and cannot be changed afterward. Remediation involves creating a new cluster with encryption enabled and migrating the data.",
         "pci_requirement": "PCI DSS 3.5.1",
+        "data_sources": ['databases'],
         "check_function": check_docdb_cluster_unencrypted
     },
     {
@@ -1729,6 +1763,7 @@ RULES_TO_CHECK = [
         "description": "A certificate managed by AWS Certificate Manager (ACM) has been detected that has expired. Expired certificates cause trust errors in browsers and can disrupt service for applications that use them.",
         "remediation": "Navigate to the ACM console, locate the affected certificate by its domain name, and proceed to renew it. If the certificate is no longer in use, delete it to avoid alerts.",
         "pci_requirement": "PCI DSS 4.2.1",
+        "data_sources": ['acm'],
         "check_function": check_acm_expired_certificates
     },
     {
@@ -1779,6 +1814,7 @@ RULES_TO_CHECK = [
         "description": "An ECR repository does not automatically scan images for vulnerabilities, and Amazon Inspector is also not configured to scan ECR images in this region. This creates a critical security gap, as there is no automated mechanism to detect vulnerabilities in container images.",
         "remediation": "The highest priority is to enable 'Scan on push' in the ECR repository settings. As a secondary control, enable Amazon Inspector for ECR in the region.",
         "pci_requirement": "PCI DSS 6.2.3",
+        "data_sources": ['ecr', 'inspector'],
         "check_function": check_ecr_no_scan_on_push_and_no_inspector
     },
     {
@@ -1789,6 +1825,7 @@ RULES_TO_CHECK = [
         "description": "An ECR repository does not use the basic 'Scan on push' feature. However, Amazon Inspector is active for ECR in this region, which acts as a compensating control by providing advanced vulnerability scanning. While this is a better configuration, enabling 'Scan on push' is still recommended for immediate feedback.",
         "remediation": "Enable 'Scan on push' in the ECR repository settings to get immediate vulnerability feedback upon pushing an image.",
         "pci_requirement": "PCI DSS 6.2.3",
+        "data_sources": ['ecr', 'inspector'],
         "check_function": check_ecr_no_scan_on_push_but_inspector_ok
     },
     {
@@ -1819,6 +1856,7 @@ RULES_TO_CHECK = [
         "description": "A CodePipeline does not have an integrated security scanning stage, and Amazon Inspector is also not configured to scan container images in this region. This means code or images could be deployed to production with known vulnerabilities without any automated checks.",
         "remediation": "The best practice is to add a security scanning stage to your pipeline (e.g., using CodeBuild with tools like Trivy, SonarQube, or AWS Inspector). As a baseline, ensure Amazon Inspector is enabled for ECR in the region.",
         "pci_requirement": "PCI DSS 6.2.3",
+        "data_sources": ['codepipeline', 'inspector', 'ecr'],
         "check_function": check_codepipeline_no_scan_and_no_inspector
     },
     {
@@ -1829,6 +1867,7 @@ RULES_TO_CHECK = [
         "description": "A CodePipeline does not have a specific security scanning stage. However, Amazon Inspector is active for ECR in this region, providing a compensating control for container image vulnerabilities. While this is a good baseline, integrating a scan directly into the pipeline provides earlier feedback.",
         "remediation": "For more robust security, add a dedicated security scanning stage to your pipeline. This allows you to fail the build early if critical vulnerabilities are found, rather than discovering them after the image is in ECR.",
         "pci_requirement": "PCI DSS 6.2.3",
+        "data_sources": ['codepipeline', 'inspector', 'ecr'],
         "check_function": check_codepipeline_no_scan_but_inspector_ok
     },
     {

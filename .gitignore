@@ -37,3 +37,7 @@ db.sqlite3
 
 # Flask-specific files
 instance/
+
+# Test dependencies and caches
+node_modules/
+.pytest_cache/
