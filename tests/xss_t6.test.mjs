@@ -29,11 +29,18 @@ function fixture(payload = 'Benign') {
   };
 }
 function installFixture(data) { window.inspectorApiData = structuredClone(data.inspectorApiData); window.acmApiData = structuredClone(data.acmApiData); }
+async function waitForInspectorFilters() {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (document.getElementById('inspector-findings-count')?.textContent.trim()) return;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.fail('Inspector filter initialization did not complete');
+}
 async function reachInspectorComplete(build, findings) {
   window.fetch = globalThis.fetch = async () => ({ ok: true, json: async () => ({ results: { findings, findingsStatus: 'complete', _collection: structuredClone(coverage) } }) });
   build();
   document.getElementById('run-deep-inspector-scan-btn')?.click();
-  await new Promise(resolve => setTimeout(resolve, 150));
+  await waitForInspectorFilters();
   document.getElementById('inspector-search-filter')?.dispatchEvent(new window.Event('input', { bubbles: true }));
   assert.ok(document.querySelector('#inspector-findings-tbody tr'), 'complete Inspector findings table contains a real row');
   document.querySelector('#inspector-tabs-results a[data-tab="inspector-findings-content"]')?.click();
