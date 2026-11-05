@@ -1,4 +1,5 @@
 import { coverageOf, isMigratedCollector, failedCollectionResponse } from './collection.js';
+import { createProgressTracker, renderProgress, hideProgress } from './progress.js';
 import { html, raw, setHtml, act, installActionDelegation } from './safe_html.js';
 /**
  * app.js
@@ -509,32 +510,33 @@ const runAnalysisFromInputs = async (source = 'main') => {
     btnText.textContent = 'Scanning...'; 
     errorDiv.classList.add('hidden');
     
+    let ticker = null;
     try {
         log('Calling all AWS APIs...', 'info');
         window.activeScanId = crypto.randomUUID();
         const scanHeaders = { 'Content-Type': 'application/json', 'X-Scan-Id': window.activeScanId };
         const apiCalls = {
-            iam: fetch(window.CONSTANTS.API.RUNS['/api/run-iam-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            accessAnalyzer: fetch(window.CONSTANTS.API.RUNS['/api/run-access-analyzer-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            securityhub: fetch(window.CONSTANTS.API.RUNS['/api/run-securityhub-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            exposure: fetch(window.CONSTANTS.API.RUNS['/api/run-exposure-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            guardduty: fetch(window.CONSTANTS.API.RUNS['/api/run-guardduty-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            waf: fetch(window.CONSTANTS.API.RUNS['/api/run-waf-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            cloudtrail: fetch(window.CONSTANTS.API.RUNS['/api/run-cloudtrail-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            cloudwatch: fetch(window.CONSTANTS.API.RUNS['/api/run-cloudwatch-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            inspector: fetch(window.CONSTANTS.API.RUNS['/api/run-inspector-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            acm: fetch(window.CONSTANTS.API.RUNS['/api/run-acm-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            compute: fetch(window.CONSTANTS.API.RUNS['/api/run-compute-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            ecr: fetch(window.CONSTANTS.API.RUNS['/api/run-ecr-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            databases: fetch(window.CONSTANTS.API.RUNS['/api/run-databases-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            network_policies: fetch(window.CONSTANTS.API.RUNS['/api/run-network-policies-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            federation: fetch(window.CONSTANTS.API.RUNS['/api/run-federation-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            config_sh_status: fetch(window.CONSTANTS.API.RUNS['/api/run-config-sh-status-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            kms: fetch(window.CONSTANTS.API.RUNS['/api/run-kms-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            secrets_manager: fetch(window.CONSTANTS.API.RUNS['/api/run-secrets-manager-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            connectivity: fetch(window.CONSTANTS.API.RUNS['/api/run-connectivity-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            codepipeline: fetch(window.CONSTANTS.API.RUNS['/api/run-codepipeline-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
-            inventory: fetch(window.CONSTANTS.API.RUNS['/api/run-inventory-audit'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) })
+            iam: fetch(window.CONSTANTS.API.RUNS.iam, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            accessAnalyzer: fetch(window.CONSTANTS.API.RUNS.accessAnalyzer, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            securityhub: fetch(window.CONSTANTS.API.RUNS.securityhub, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            exposure: fetch(window.CONSTANTS.API.RUNS.exposure, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            guardduty: fetch(window.CONSTANTS.API.RUNS.guardduty, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            waf: fetch(window.CONSTANTS.API.RUNS.waf, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            cloudtrail: fetch(window.CONSTANTS.API.RUNS.cloudtrail, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            cloudwatch: fetch(window.CONSTANTS.API.RUNS.cloudwatch, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            inspector: fetch(window.CONSTANTS.API.RUNS.inspector, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            acm: fetch(window.CONSTANTS.API.RUNS.acm, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            compute: fetch(window.CONSTANTS.API.RUNS.compute, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            ecr: fetch(window.CONSTANTS.API.RUNS.ecr, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            databases: fetch(window.CONSTANTS.API.RUNS.databases, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            network_policies: fetch(window.CONSTANTS.API.RUNS.network_policies, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            federation: fetch(window.CONSTANTS.API.RUNS.federation, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            config_sh_status: fetch(window.CONSTANTS.API.RUNS.config_sh_status, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            kms: fetch(window.CONSTANTS.API.RUNS['kms-secrets'], { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            secrets_manager: fetch(window.CONSTANTS.API.RUNS.secrets_manager, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            connectivity: fetch(window.CONSTANTS.API.RUNS.connectivity, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            codepipeline: fetch(window.CONSTANTS.API.RUNS.codepipeline, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) }),
+            inventory: fetch(window.CONSTANTS.API.RUNS.inventory, { method: 'POST', headers: scanHeaders, body: JSON.stringify(payload) })
         };
 
         const totalTests = Object.keys(apiCalls).length;
@@ -566,6 +568,12 @@ const runAnalysisFromInputs = async (source = 'main') => {
             inventory: 'Inventory'
         };
         const formatTestLabel = (key) => testLabels[key] || key.replace(/_/g, ' ');
+        const tracker = createProgressTracker(Object.keys(apiCalls));
+        Object.keys(apiCalls).forEach((key) => tracker.start(key));
+        const progressRoots = document.querySelectorAll('[data-scan-progress]');
+        const paint = () => progressRoots.forEach((root) => renderProgress(root, tracker.snapshot(), formatTestLabel));
+        paint();
+        ticker = setInterval(paint, 1000);
         
         const promises = Object.entries(apiCalls).map(async ([key, promise]) => {
             try { 
@@ -575,6 +583,8 @@ const runAnalysisFromInputs = async (source = 'main') => {
                     throw new Error(errorData.error || `HTTP error! status: ${response.status}`); 
                 } 
                 const data = await response.json();
+                tracker.finish(key, true);
+                paint();
                 completedTests += 1;
                 log(`Progress: ${getProgressPercent()}% (${completedTests}/${totalTests}) - ${formatTestLabel(key)} done`, 'info');
                 const coverage = coverageOf(data);
@@ -584,6 +594,8 @@ const runAnalysisFromInputs = async (source = 'main') => {
                 return [key, data];
             } catch (error) { 
                 log(`Error for API '${key}': ${error.message}`, 'error'); 
+                tracker.finish(key, false);
+                paint();
                 completedTests += 1;
                 log(`Progress: ${getProgressPercent()}% (${completedTests}/${totalTests}) - ${formatTestLabel(key)} failed`, 'warning');
                 return [key, failedCollectionResponse(key, window.activeScanId)];
@@ -645,6 +657,8 @@ const runAnalysisFromInputs = async (source = 'main') => {
         errorDiv.classList.remove('hidden');
         log(`${errorMsg}`, 'error');
     } finally {
+        clearInterval(ticker);
+        document.querySelectorAll('[data-scan-progress]').forEach(hideProgress);
         runBtn.disabled = false;
         spinner.classList.add('hidden');
         btnText.textContent = 'Scan Account';

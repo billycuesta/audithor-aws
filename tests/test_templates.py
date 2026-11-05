@@ -49,6 +49,16 @@ def test_external_resources_are_pinned_and_integrity_checked():
             assert resource.get("referrerpolicy") == "no-referrer"
 
 
+def test_dashboard_has_two_hidden_scan_progress_blocks_without_inline_handlers():
+    template = Path(__file__).resolve().parents[1] / "audithor/templates/dashboard.html"
+    html = template.read_text()
+    tags = re.findall(r"<div data-scan-progress[ >][^>]*>", html)
+    assert len(tags) == 2
+    assert all('role="progressbar"' in tag and re.search(r'class="hidden(?:\s|")', tag) for tag in tags)
+    assert len(re.findall(r"<div data-scan-progress[ >]", html.replace(tags[0], "", 1))) == 1
+    assert not re.search(r"\son[a-z]+\s*=", html, re.IGNORECASE)
+
+
 def test_dashboard_and_vendored_tailwind_are_served_by_flask():
     from audithor import audithor_app
     from conftest import make_client
