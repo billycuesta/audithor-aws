@@ -76,6 +76,7 @@ const API = {
   RUN_SECRETS_MANAGER:     `${BASE}/api/run-secrets-manager-audit`,
   RUN_CONNECTIVITY:        `${BASE}/api/run-connectivity-audit`,
   RUN_CODEPIPELINE:        `${BASE}/api/run-codepipeline-audit`,
+  RUN_INVENTORY:           `${BASE}/api/run-inventory-audit`,
 };
 
 // =====================================================
@@ -102,6 +103,7 @@ API.RUNS = {
   config_sh_status:    API.RUN_CONFIG_SH_STATUS,   // con guion bajo (fallback)
   'config-sh':         API.RUN_CONFIG_SH_STATUS,   // con guion (UI)
   codepipeline:        API.RUN_CODEPIPELINE,
+  inventory:           API.RUN_INVENTORY,
   federation:          API.RUN_FEDERATION,
   secrets_manager:     API.RUN_SECRETS_MANAGER,    // con guion bajo (fallback)
 };
