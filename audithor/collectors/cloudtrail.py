@@ -6,6 +6,68 @@ from datetime import datetime, timedelta
 import pytz
 from .utils import get_all_aws_regions # Importación relativa
 from .cloudwatch import get_log_group_destinations
+from .diagnostics import classify_error
+
+
+def _enrich_trail(session, client, trail, bucket_cache):
+    enrichment = {}
+    trail_name = trail.get("TrailARN") or trail.get("Name")
+    for group, operation, response_key in (("selectors", "get_event_selectors", None), ("insights", "get_insight_selectors", "InsightSelectors")):
+        try:
+            response = getattr(client, operation)(TrailName=trail_name)
+            if group == "selectors":
+                trail["EventSelectors"] = response.get("EventSelectors", [])
+                trail["AdvancedEventSelectors"] = response.get("AdvancedEventSelectors", [])
+            else:
+                trail[response_key] = response.get(response_key, [])
+            enrichment[group] = {"status": "complete"}
+        except ClientError as exc:
+            if group == "insights" and exc.response.get("Error", {}).get("Code") == "InsightNotEnabledException":
+                trail[response_key] = []
+                enrichment[group] = {"status": "complete"}
+            else:
+                enrichment[group] = {"status": "failed", "reason": classify_error(exc)["category"]}
+    bucket = trail.get("S3BucketName")
+    if bucket:
+        if bucket not in bucket_cache:
+            try:
+                s3 = session.client("s3", region_name=trail.get("HomeRegion"))
+                bucket_cache[bucket] = (s3.get_bucket_lifecycle_configuration(Bucket=bucket).get("Rules", []), None)
+            except ClientError as exc:
+                if exc.response.get("Error", {}).get("Code") == "NoSuchLifecycleConfiguration":
+                    bucket_cache[bucket] = ([], None)
+                else:
+                    bucket_cache[bucket] = ([], classify_error(exc)["category"])
+        rules, error = bucket_cache[bucket]
+        if error:
+            enrichment["lifecycle"] = {"status": "failed", "reason": error}
+        else:
+            prefix = trail.get("S3KeyPrefix", "")
+            root = f"{prefix}/AWSLogs/" if prefix else "AWSLogs/"
+            applicable = []
+            for rule in rules:
+                if rule.get("Status") != "Enabled":
+                    continue
+                filter_data = rule.get("Filter", {})
+                rule_prefix = None
+                if isinstance(filter_data, dict):
+                    and_filter = filter_data.get("And") or {}
+                    if "Tag" in filter_data or "Tags" in and_filter:
+                        continue
+                    rule_prefix = filter_data.get("Prefix")
+                    if rule_prefix is None:
+                        rule_prefix = and_filter.get("Prefix")
+                if rule_prefix is None:
+                    rule_prefix = rule.get("Prefix", "")
+                rule_prefix = rule_prefix or ""
+                if root.startswith(rule_prefix) and isinstance(rule.get("Expiration", {}).get("Days"), int):
+                    applicable.append(rule["Expiration"]["Days"])
+            trail["LogBucketLifecycle"] = {"Rules": rules, "RetentionDays": min(applicable) if applicable else None}
+            enrichment["lifecycle"] = {"status": "complete"}
+    else:
+        trail["LogBucketLifecycle"] = {"Rules": [], "RetentionDays": None}
+        enrichment["lifecycle"] = {"status": "skipped"}
+    trail["Enrichment"] = enrichment
 
 
 def collect_cloudtrail_data(session: boto3.Session):
@@ -38,6 +100,7 @@ def collect_cloudtrail_data(session: boto3.Session):
     result_trails = []
     result_events = []
     processed_trail_arns = set()
+    bucket_lifecycle_cache = {}
 
     # --- 1. Collect Trail Configurations ---
     for region in regions:
@@ -53,6 +116,7 @@ def collect_cloudtrail_data(session: boto3.Session):
                             "Name": trail.get("Name"),
                             "HomeRegion": trail.get("HomeRegion"),
                             "S3BucketName": trail.get("S3BucketName"),
+                            "S3KeyPrefix": trail.get("S3KeyPrefix"),
                             "IsMultiRegionTrail": trail.get("IsMultiRegionTrail", False),
                             "IsOrganizationTrail": trail.get("IsOrganizationTrail", False),
                             "IsLogging": status.get("IsLogging", False),
@@ -61,6 +125,7 @@ def collect_cloudtrail_data(session: boto3.Session):
                             "CloudWatchLogsLogGroupArn": trail.get("CloudWatchLogsLogGroupArn"),
                             "TrailARN": trail_arn
                         })
+                        _enrich_trail(session, client, result_trails[-1], bucket_lifecycle_cache)
                         processed_trail_arns.add(trail_arn)
                     except ClientError:
                         continue # Failed to get status, but continue processing other trails
@@ -75,7 +140,7 @@ def collect_cloudtrail_data(session: boto3.Session):
         "StartInstances", "StopInstances", "TerminateInstances",
         "DisableKey", "ScheduleKeyDeletion"
     ]
-    
+
     end_time = datetime.now(pytz.utc)
     start_time = end_time - timedelta(days=7)
 
@@ -98,7 +163,10 @@ def collect_cloudtrail_data(session: boto3.Session):
                             "Username": event.get("Username", "N/A"),
                             "EventRegion": event_data.get("awsRegion", region),
                             "SourceIPAddress": event_data.get("sourceIPAddress", "N/A"),
-                            "RequestParameters": event_data.get("requestParameters", {})
+                            "RequestParameters": event_data.get("requestParameters", {}),
+                            "ErrorCode": event_data.get("errorCode"),
+                            "ErrorMessage": event_data.get("errorMessage"),
+                            "MFAUsed": (event_data.get("userIdentity", {}).get("sessionContext", {}).get("attributes", {}).get("mfaAuthenticated") == "true") if "mfaAuthenticated" in event_data.get("userIdentity", {}).get("sessionContext", {}).get("attributes", {}) else None
                         })
         except ClientError:
             continue # Failed to look up events in this region
