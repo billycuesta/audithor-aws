@@ -65,8 +65,8 @@ for (const config of configs) {
   const current = await loadView(`../audithor/static/js/views`, config, fixture);
   assertNoLiteralMarkup(baseline.root);
   assertNoLiteralMarkup(current.root);
-  const compareText = (actual, expected, label) => config.module === '12_kms_secrets' ? assertTextContainsInOrder(actual, expected, label) : assert.equal(actual, expected, label);
-  const compareTags = (actual, expected, label) => config.module === '12_kms_secrets' ? assertOrderedSubsequence(actual, expected, label) : assert.deepEqual(actual, expected, label);
+  const compareText = (actual, expected, label) => ['12_kms_secrets', '14_connectivity'].includes(config.module) ? assertTextContainsInOrder(actual, expected, label) : assert.equal(actual, expected, label);
+  const compareTags = (actual, expected, label) => ['12_kms_secrets', '14_connectivity'].includes(config.module) ? assertOrderedSubsequence(actual, expected, label) : assert.deepEqual(actual, expected, label);
   compareText(benignText(current.root), benignText(baseline.root), `${config.name} benign text parity`);
   compareTags(tagSequence(current.root), tagSequence(baseline.root), `${config.name} benign tag parity`);
 

@@ -3,6 +3,7 @@ import json
 import boto3
 from botocore.exceptions import ClientError
 from .utils import get_all_aws_regions # Importación relativa
+from .diagnostics import classify_error
 
 def collect_connectivity_data(session):
     """
@@ -39,7 +40,10 @@ def collect_connectivity_data(session):
         "tgw_attachments": [],
         "vpn_connections": [],
         "vpc_endpoints": [],
-        "nat_gateways": []
+        "nat_gateways": [],
+        "route_tables": [],
+        "endpoint_coverage": [],
+        "Enrichment": {"routeTables": {"status": "complete"}, "endpointCoverage": {"status": "complete"}}
     }
 
     for region in regions:
@@ -112,7 +116,32 @@ def collect_connectivity_data(session):
                         "Tags": nat_gateway.get("Tags", [])
                     })
 
+            # --- Route tables and endpoint coverage ---
+            tables = []
+            try:
+                tables = ec2_client.describe_route_tables().get("RouteTables", [])
+                for table in tables:
+                    result["route_tables"].append({"Region": region, "RouteTableId": table.get("RouteTableId"), "VpcId": table.get("VpcId"), "Routes": table.get("Routes", []), "Associations": table.get("Associations", [])})
+            except ClientError as exc:
+                reason = classify_error(exc)["category"]
+                result["Enrichment"]["routeTables"] = {"status": "failed", "reason": reason}
+                result["Enrichment"]["endpointCoverage"] = {"status": "failed", "reason": reason}
+
+            endpoints = [e for e in result["vpc_endpoints"] if e["Region"] == region]
+            by_vpc = {}
+            for endpoint in endpoints:
+                suffix = (endpoint.get("ServiceName") or "").rsplit(".", 1)[-1].lower()
+                service = {"s3": "S3", "dynamodb": "DynamoDB", "kms": "KMS"}.get(suffix)
+                if service:
+                    by_vpc.setdefault(endpoint.get("VpcId"), {})[service] = {"EndpointType": endpoint.get("EndpointType")}
+            vpc_ids = {table.get("VpcId") for table in tables if table.get("VpcId")}
+            vpc_ids.update(by_vpc)
+            for vpc_id in vpc_ids:
+                services = by_vpc.get(vpc_id, {})
+                result["endpoint_coverage"].append({"Region": region, "VpcId": vpc_id, "Services": {name: services.get(name, "Missing") for name in ("S3", "DynamoDB", "KMS")}})
+
         except ClientError as e:
+            result["Enrichment"]["endpointCoverage"] = {"status": "failed", "reason": classify_error(e)["category"]}
             # Gracefully skip regions that are disabled or inaccessible
             common_errors = ['InvalidClientTokenId', 'UnrecognizedClientException', 'AuthFailure', 'AccessDeniedException', 'OptInRequired']
             if e.response['Error']['Code'] in common_errors:

@@ -88,6 +88,8 @@ export const buildConnectivityView = () => {
             <div id="conn-endpoints-content" class="connectivity-tab-content hidden">
                 ${renderServiceDescription(serviceDescriptions.endpoints)}
                 ${renderVpcEndpointsTable(vpc_endpoints)}
+                ${renderRouteTables(window.connectivityApiData.results.route_tables, window.connectivityApiData.results.Enrichment?.routeTables)}
+                ${renderEndpointCoverage(window.connectivityApiData.results.endpoint_coverage, window.connectivityApiData.results.Enrichment?.endpointCoverage)}
             </div>
             <div id="conn-natgateways-content" class="connectivity-tab-content hidden">
                 ${renderServiceDescription(serviceDescriptions.natgateways)}
@@ -124,6 +126,20 @@ const renderServiceDescription = (serviceInfo) => {
 };
 
 // --- INTERNAL MODULE FUNCTIONS (NOT EXPORTED) ---
+
+const renderRouteTables = (tables, enrichment) => {
+    const rows = (tables || []).map(t => html`<tr class="hover:bg-gray-50"><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${t.Region}</td><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${t.VpcId}</td><td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${t.RouteTableId}</td><td class="px-4 py-4 text-sm text-gray-600">${(t.Routes || []).map(r => `${r.DestinationCidrBlock || r.DestinationIpv6CidrBlock || r.DestinationPrefixListId || '-'} → ${r.GatewayId || r.NatGatewayId || r.NetworkInterfaceId || r.VpcPeeringConnectionId || r.TransitGatewayId || r.EgressOnlyInternetGatewayId || '-'}`).join('; ') || 'None'}</td><td class="px-4 py-4 text-sm text-gray-600">${(t.Routes || []).some(r => r.GatewayId?.startsWith('igw-')) ? 'Internet gateway route' : 'None'}</td><td class="px-4 py-4 text-sm text-gray-600">${(t.Associations || []).map(a => a.Main ? 'Main' : a.SubnetId || '-').join(', ') || 'None'}</td></tr>`);
+    const statusRow = enrichment?.status === 'failed' ? html`<tr><td colspan="6" class="px-4 py-3 text-sm text-gray-500">Not collected: ${enrichment.reason || 'unknown'}</td></tr>` : !enrichment ? html`<tr><td colspan="6" class="px-4 py-3 text-sm text-gray-500">Not collected</td></tr>` : null;
+    const emptyRow = enrichment?.status === 'complete' && rows.length === 0 ? html`<tr><td colspan="6" class="px-4 py-3 text-sm text-gray-500">None found</td></tr>` : null;
+    return html`<h3 class="text-lg font-semibold text-gray-800 mt-6">Route Tables</h3><div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPC</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Route Table</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Routes</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Internet Gateway</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Associations</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}${statusRow || emptyRow || ''}</tbody></table></div>`;
+};
+
+const renderEndpointCoverage = (coverage, enrichment) => {
+    const rows = (coverage || []).map(v => html`<tr class="hover:bg-gray-50"><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${v.Region}</td><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${v.VpcId}</td><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${v.Services?.S3?.EndpointType || v.Services?.S3 || 'Missing'}</td><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${v.Services?.DynamoDB?.EndpointType || v.Services?.DynamoDB || 'Missing'}</td><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${v.Services?.KMS?.EndpointType || v.Services?.KMS || 'Missing'}</td></tr>`);
+    const statusRow = enrichment?.status === 'failed' ? html`<tr><td colspan="5" class="px-4 py-3 text-sm text-gray-500">Not collected: ${enrichment.reason || 'unknown'}</td></tr>` : !enrichment ? html`<tr><td colspan="5" class="px-4 py-3 text-sm text-gray-500">Not collected</td></tr>` : null;
+    const emptyRow = enrichment?.status === 'complete' && rows.length === 0 ? html`<tr><td colspan="5" class="px-4 py-3 text-sm text-gray-500">None found</td></tr>` : null;
+    return html`<h3 class="text-lg font-semibold text-gray-800 mt-6">Endpoint Coverage</h3><div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPC</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">S3</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">DynamoDB</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">KMS</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}${statusRow || emptyRow || ''}</tbody></table></div>`;
+};
 
 const renderPeeringTable = (connections) => {
     if (!connections || connections.length === 0) {
