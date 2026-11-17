@@ -41,16 +41,9 @@ def collect_cloudwatch_data(session):
 
     for region in all_regions:
         try:
-            # Create a new session for each specific region
-            session_regional = boto3.Session(
-                aws_access_key_id=session.get_credentials().access_key,
-                aws_secret_access_key=session.get_credentials().secret_key,
-                aws_session_token=session.get_credentials().token,
-                region_name=region
-            )
-            cw_client = session_regional.client("cloudwatch")
-            sns_client = session_regional.client("sns")
-            logs_client = session_regional.client("logs")
+            cw_client = session.client("cloudwatch", region_name=region)
+            sns_client = session.client("sns", region_name=region)
+            logs_client = session.client("logs", region_name=region)
 
             try:
                 for page in logs_client.get_paginator('describe_log_groups').paginate():

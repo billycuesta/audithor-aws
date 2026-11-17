@@ -7,7 +7,7 @@ import boto3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from botocore.config import Config
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import BotoCoreError, ClientError, ProfileNotFound, SSOTokenLoadError, UnauthorizedSSOTokenError, TokenRetrievalError
 
 AWS_CONFIG = Config(connect_timeout=5, read_timeout=20,
                     retries={"mode": "standard", "total_max_attempts": 3})
@@ -24,7 +24,11 @@ def classify_error(exc):
     response = (getattr(exc, "response", None) or {})
     code = response.get("Error", {}).get("Code", type(exc).__name__)
     meta = response.get("ResponseMetadata", {})
-    if code in {"AccessDenied", "AccessDeniedException", "UnauthorizedOperation", "ACCESS_DENIED"}:
+    if isinstance(exc, ProfileNotFound):
+        category, retryable = "profile_not_found", False
+    elif isinstance(exc, (SSOTokenLoadError, UnauthorizedSSOTokenError, TokenRetrievalError)):
+        category, retryable = "sso_login_required", False
+    elif code in {"AccessDenied", "AccessDeniedException", "UnauthorizedOperation", "ACCESS_DENIED"}:
         category, retryable = "permission_denied", False
     elif code in {"InvalidClientTokenId", "UnrecognizedClientException", "AuthFailure",
                   "ExpiredToken", "ExpiredTokenException", "SignatureDoesNotMatch",
