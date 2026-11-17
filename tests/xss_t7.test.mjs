@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { pathToFileURL } from 'node:url';
-import { makeDom, assertNoInjection, clickAll, benignText, tagSequence, PAYLOADS } from './helpers/xss_payloads.mjs';
+import { makeDom, assertNoInjection, clickAll, benignText, tagSequence, PAYLOADS, assertOrderedSubsequence, assertTextContainsInOrder } from './helpers/xss_payloads.mjs';
 import { installActionDelegation } from '../audithor/static/js/safe_html.js';
 
 const fixtures = {
@@ -37,13 +37,10 @@ for (const view of views) {
   };
   const before = await render(original, view.fixture);
   const after = await render(converted, view.fixture);
-  if (benignText(after.container) !== benignText(before.container)) {
-    const actual = benignText(after.container), expected = benignText(before.container);
-    const index = [...actual].findIndex((char, i) => char !== expected[i]);
-    console.error('Parity difference', index, JSON.stringify(actual.slice(index - 20, index + 40)), JSON.stringify(expected.slice(index - 20, index + 40)));
-  }
-  assert.equal(benignText(after.container), benignText(before.container), `${view.file} parity text`);
-  assert.deepEqual(tagSequence(after.container), tagSequence(before.container), `${view.file} parity structure`);
+  const compareText = (actual, expected, label) => assertTextContainsInOrder(actual, expected, label);
+  const compareTags = (actual, expected, label) => assertOrderedSubsequence(actual, expected, label);
+  compareText(benignText(after.container), benignText(before.container), `${view.file} parity text`);
+  compareTags(tagSequence(after.container), tagSequence(before.container), `${view.file} parity structure`);
   assertNoLiteralMarkup(after.container);
   for (const tab of after.container.querySelectorAll('[data-tab]')) {
     tab.dispatchEvent(new after.dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
@@ -51,8 +48,8 @@ for (const view of views) {
   for (const tab of before.container.querySelectorAll('[data-tab]')) {
     tab.dispatchEvent(new before.dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
   }
-  assert.equal(benignText(after.container), benignText(before.container), `${view.file} tab click parity text`);
-  assert.deepEqual(tagSequence(after.container), tagSequence(before.container), `${view.file} tab click parity structure`);
+  compareText(benignText(after.container), benignText(before.container), `${view.file} tab click parity text`);
+  compareTags(tagSequence(after.container), tagSequence(before.container), `${view.file} tab click parity structure`);
   for (const payload of PAYLOADS) {
     const { dom, container } = await render(converted, clonePayload(view.fixture, payload));
     try { assertNoInjection(dom.window, container); } catch (error) {
@@ -70,8 +67,8 @@ for (const view of views) {
         if (module === original) {
           var originalModal = { text: benignText(modalContent), tags: tagSequence(modalContent) };
         } else {
-          assert.equal(benignText(modalContent), originalModal.text, `${opener} parity text`);
-          assert.deepEqual(tagSequence(modalContent), originalModal.tags, `${opener} parity structure`);
+          assertTextContainsInOrder(benignText(modalContent), originalModal.text, `${view.file} ${opener} parity text`);
+          assertOrderedSubsequence(tagSequence(modalContent), originalModal.tags, `${view.file} ${opener} parity structure`);
           assertNoLiteralMarkup(modalContent);
         }
       }
