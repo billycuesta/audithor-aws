@@ -1,3 +1,4 @@
+import { buildCredentialPayload, validateCredentials } from '../credentials.js';
 /**
  * 06_cloudtrail.js
  * Contiene toda la lógica para construir y renderizar la vista de CloudTrail.
@@ -601,11 +602,8 @@ const renderCloudtrailLookUpView = (allRegions) => {
     `;
 };
 
-const runCloudtrailLookupAnalysis = async () => {
+export const runCloudtrailLookupAnalysis = async () => {
     log('Starting CloudTrail log search...', 'info');
-    const accessKeyInput = document.getElementById("access-key-input");
-    const secretKeyInput = document.getElementById("secret-key-input");
-    const sessionTokenInput = document.getElementById("session-token-input");
     const eventName = document.getElementById('ct-event-name').value.trim();
     const startDate = document.getElementById('ct-start-date').value.trim();
     const endDate = document.getElementById('ct-end-date').value.trim();
@@ -620,6 +618,13 @@ const runCloudtrailLookupAnalysis = async () => {
         return;
     }
 
+    const credentialError = validateCredentials();
+    if (credentialError) {
+        log(credentialError, 'error');
+        setHtml(resultsContainer, html`<p class="text-red-600 font-medium">Error: ${credentialError}</p>`);
+        return;
+    }
+
     const runBtn = document.getElementById('ct-run-lookup-btn');
     const btnText = document.getElementById('ct-lookup-btn-text');
     const spinner = document.getElementById('ct-lookup-spinner');
@@ -629,9 +634,7 @@ const runCloudtrailLookupAnalysis = async () => {
     btnText.textContent = 'Searching...';
 
     const payload = {
-        access_key: accessKeyInput.value.trim(),
-        secret_key: secretKeyInput.value.trim(),
-        session_token: sessionTokenInput.value.trim() || null,
+        ...buildCredentialPayload(),
         event_name: eventName,
         start_date: startDate,
         end_date: endDate,

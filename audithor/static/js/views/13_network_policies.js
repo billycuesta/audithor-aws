@@ -1,3 +1,4 @@
+import { buildCredentialPayload, validateCredentials } from '../credentials.js';
 /**
  * 13_network_policies.js
  * Contiene toda la lógica para construir y renderizar la vista de Network Security Policies.
@@ -415,7 +416,7 @@ const renderNetworkDetailView = (allRegions) => {
     `;
 };
 
-const runNetworkDetailAnalysis = async () => {
+export const runNetworkDetailAnalysis = async () => {
     log('Starting detailed network analysis…', 'info');
     const resourceId = document.getElementById('np-resource-id').value.trim();
     const region = document.getElementById('np-resource-region').value;
@@ -437,14 +438,18 @@ const runNetworkDetailAnalysis = async () => {
     btnText.textContent = 'Analyzing...';
     
     // These need to be accessed from the global scope
-    const accessKeyInput = document.getElementById('access-key-input');
-    const secretKeyInput = document.getElementById('secret-key-input');
-    const sessionTokenInput = document.getElementById('session-token-input');
+    const credentialError = validateCredentials();
+    if (credentialError) {
+        log(credentialError, 'error');
+        setHtml(resultsContainer, html`<p class="text-red-600 font-medium">Error: ${credentialError}</p>`);
+        runBtn.disabled = false;
+        spinner.classList.add('hidden');
+        btnText.textContent = 'Analyze';
+        return;
+    }
 
     const payload = {
-        access_key: accessKeyInput.value.trim(),
-        secret_key: secretKeyInput.value.trim(),
-        session_token: sessionTokenInput.value.trim() || null,
+        ...buildCredentialPayload(),
         resource_id: resourceId,
         region: region
     };

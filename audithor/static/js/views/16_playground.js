@@ -1,3 +1,4 @@
+import { buildCredentialPayload, validateCredentials } from '../credentials.js';
 /**
  * 16_playground.js
  * Contains all logic for building and rendering the Playground view with interactive tools.
@@ -215,7 +216,7 @@ export const buildPlaygroundView = () => {
 
 // --- INTERNAL MODULE FUNCTIONS (NOT EXPORTED) ---
 
-const runPlaygroundAnalysis = async () => {
+export const runPlaygroundAnalysis = async () => {
     log('Starting network path analysis…', 'info');
     const sourceArn = document.getElementById('pg-source-arn').value.trim();
     const targetArn = document.getElementById('pg-target-arn').value.trim();
@@ -237,14 +238,17 @@ const runPlaygroundAnalysis = async () => {
     btnText.textContent = 'Analyzing...';
     
     // These need to be accessed from the global scope for credentials
-    const accessKeyInput = document.getElementById('access-key-input');
-    const secretKeyInput = document.getElementById('secret-key-input');
-    const sessionTokenInput = document.getElementById('session-token-input');
-
+    const credentialError = validateCredentials();
+    if (credentialError) {
+        setHtml(resultsContainer, html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Credentials Required</h4><p>${credentialError}</p></div>`);
+        runBtn.disabled = false;
+        spinner.classList.add('hidden');
+        btnText.textContent = 'Analyze';
+        return;
+    }
+    
     const payload = {
-        access_key: accessKeyInput.value.trim(),
-        secret_key: secretKeyInput.value.trim(),
-        session_token: sessionTokenInput.value.trim() || null,
+        ...buildCredentialPayload(),
         source_arn: sourceArn,
         target_arn: targetArn
     };
@@ -331,7 +335,7 @@ const renderPlaygroundResults = () => {
     setHtml(container, join(parts));
 };
 
-const runSimulation = async () => {
+export const runSimulation = async () => {
     const username = document.getElementById('pg-username').value.trim();
     const customActions = document.getElementById('pg-custom-actions').value.trim();
     const mfaContext = document.querySelector('input[name="mfa-context"]:checked').value;
@@ -352,19 +356,15 @@ const runSimulation = async () => {
     }
 
     // Check credentials
-    const accessKeyInput = document.getElementById('access-key-input');
-    const secretKeyInput = document.getElementById('secret-key-input');
-    const sessionTokenInput = document.getElementById('session-token-input');
+    const credentialError = validateCredentials();
     
-    if (!accessKeyInput.value.trim() || !secretKeyInput.value.trim()) {
-        setHtml(document.getElementById('simulation-results-container'), html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Credentials Required</h4><p>Please enter your AWS credentials in the header before running the simulation.</p></div>`);
+    if (credentialError) {
+        setHtml(document.getElementById('simulation-results-container'), html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Credentials Required</h4><p>${credentialError}</p></div>`);
         return;
     }
     
     const payload = {
-        access_key: accessKeyInput.value.trim(),
-        secret_key: secretKeyInput.value.trim(),
-        session_token: sessionTokenInput.value.trim() || null,
+        ...buildCredentialPayload(),
         username: username,
         actions: selectedActions,
         include_mfa_context: mfaContext === 'with-mfa'  // FIXED: This was inverted
@@ -447,7 +447,7 @@ const renderSimulationResults = (results) => {
     `);
 };
 
-const runLambdaSimulation = async () => {
+export const runLambdaSimulation = async () => {
     const functionName = document.getElementById('pg-lambda-name').value.trim();
     const region = document.getElementById('pg-lambda-region').value;
     const customActions = document.getElementById('pg-lambda-custom-actions').value.trim();
@@ -468,19 +468,15 @@ const runLambdaSimulation = async () => {
     }
 
     // Check credentials
-    const accessKeyInput = document.getElementById('access-key-input');
-    const secretKeyInput = document.getElementById('secret-key-input');
-    const sessionTokenInput = document.getElementById('session-token-input');
+    const credentialError = validateCredentials();
     
-    if (!accessKeyInput.value.trim() || !secretKeyInput.value.trim()) {
-        setHtml(document.getElementById('lambda-simulation-results-container'), html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Credentials Required</h4><p>Please enter your AWS credentials in the header before running the simulation.</p></div>`);
+    if (credentialError) {
+        setHtml(document.getElementById('lambda-simulation-results-container'), html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Credentials Required</h4><p>${credentialError}</p></div>`);
         return;
     }
     
     const payload = {
-        access_key: accessKeyInput.value.trim(),
-        secret_key: secretKeyInput.value.trim(),
-        session_token: sessionTokenInput.value.trim() || null,
+        ...buildCredentialPayload(),
         function_name: functionName,
         region: region,
         actions: selectedActions

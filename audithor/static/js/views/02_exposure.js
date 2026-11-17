@@ -1,3 +1,4 @@
+import { buildCredentialPayload, validateCredentials } from '../credentials.js';
 /**
  * 02_exposure.js
  * Contiene toda la lÃ³gica para construir y renderizar la vista de Internet Exposure.
@@ -744,18 +745,14 @@ window.runS3BucketSecurityCheck = async (bucketName) => {
 
     try {
         // Obtener credenciales del header
-        const accessKeyInput = document.getElementById("access-key-input");
-        const secretKeyInput = document.getElementById("secret-key-input");
-        const sessionTokenInput = document.getElementById("session-token-input");
-
-        if (!accessKeyInput?.value || !secretKeyInput?.value) {
-            throw new Error("AWS credentials are required for security analysis");
+    const credentialError = validateCredentials();
+        if (credentialError) {
+            setHtml(modalContent, html`<div class="bg-red-50 border-l-4 border-red-400 rounded-lg p-4"><h4 class="font-semibold text-red-800">Analysis Failed</h4><p>${credentialError}</p></div>`);
+            return;
         }
 
         const payload = {
-            access_key: accessKeyInput.value.trim(),
-            secret_key: secretKeyInput.value.trim(),
-            session_token: sessionTokenInput.value.trim() || null,
+            ...buildCredentialPayload(),
             bucket_name: bucketName
         };
 
