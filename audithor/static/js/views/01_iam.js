@@ -1,3 +1,4 @@
+import { buildCredentialPayload, validateCredentials } from '../credentials.js';
 /**
  * 01_iam.js
  * Contiene toda la lógica para construir y renderizar la vista de Identity & Access (IAM).
@@ -300,11 +301,14 @@ export const openModalWithUserRoles = async (username, userIndex) => {
 
     // Hacer llamada API para obtener roles asumibles
     log(`Fetching assumable roles for user: ${username}`, 'info');
+    const credentialError = validateCredentials();
+    if (credentialError) {
+        setHtml(modalContent, html`<div class="bg-red-50 text-red-700 p-3 rounded-lg"><h5 class="font-bold">Error loading assumable roles</h5><p class="text-sm">${credentialError}</p></div>`);
+        return;
+    }
     
     const payload = {
-        access_key: document.getElementById('access-key-input').value.trim(),
-        secret_key: document.getElementById('secret-key-input').value.trim(),
-        session_token: document.getElementById('session-token-input').value.trim() || null,
+        ...buildCredentialPayload(),
         username: username
     };
 
@@ -509,10 +513,13 @@ export const openModalWithSsoDetails = async (groupId, groupName) => {
     modal.classList.remove('hidden');
 
     log(`Fetching members for SSO Group ID: ${groupId}`, 'info');
+    const credentialError = validateCredentials();
+    if (credentialError) {
+        setHtml(modalContent, html`<div class="bg-red-50 text-red-700 p-3 rounded-lg text-left"><h4 class="font-bold">Error</h4><p>${credentialError}</p></div>`);
+        return;
+    }
     const payload = {
-        access_key: document.getElementById('access-key-input').value.trim(),
-        secret_key: document.getElementById('secret-key-input').value.trim(),
-        session_token: document.getElementById('session-token-input').value.trim() || null,
+        ...buildCredentialPayload(),
         group_id: groupId
     };
 
@@ -870,7 +877,7 @@ const searchIamPrincipal = (rawInput) => {
     renderIamPrincipalDetails(foundPrincipal, principalType, rawInput);
 };
 
-const analyzeCustomPolicy = async (policyName) => {
+export const analyzeCustomPolicy = async (policyName) => {
     log(`Analyzing custom policy: ${policyName}`, 'info');
     const resultsContainer = document.getElementById('iam-search-results-container');
     const searchBtn = document.getElementById('iam-search-btn');
@@ -880,12 +887,17 @@ const analyzeCustomPolicy = async (policyName) => {
     searchBtn.disabled = true;
     btnText.textContent = 'Analyzing...';
     
+    const credentialError = validateCredentials();
+    if (credentialError) {
+        setHtml(resultsContainer, html`<div class="bg-red-50 text-red-700 p-4 rounded-lg"><h4 class="font-bold">Error Analyzing Policy</h4><p>${credentialError}</p></div>`);
+        searchBtn.disabled = false;
+        btnText.textContent = 'View Details';
+        return;
+    }
     setHtml(resultsContainer, html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><div class="flex items-center justify-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#204071]"></div><span class="ml-3 text-gray-600">Analyzing custom policy...</span></div></div>`);
 
     const payload = {
-        access_key: document.getElementById('access-key-input').value.trim(),
-        secret_key: document.getElementById('secret-key-input').value.trim(),
-        session_token: document.getElementById('session-token-input').value.trim() || null,
+        ...buildCredentialPayload(),
         policy_name: policyName
     };
 

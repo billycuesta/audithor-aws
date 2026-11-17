@@ -122,6 +122,17 @@ for (const payload of PAYLOADS) {
 }
 
 // Exercise the run-analysis button and its click-triggered result renderer in both versions.
+// Keep credential validation out of this parity comparison: both implementations should take the same path.
+const accessKeyInput = document.createElement('input');
+accessKeyInput.id = 'access-key-input';
+accessKeyInput.value = 'AKIAEXAMPLE';
+const secretKeyInput = document.createElement('input');
+secretKeyInput.id = 'secret-key-input';
+secretKeyInput.value = 'dummy-secret';
+const sessionTokenInput = document.createElement('input');
+sessionTokenInput.id = 'session-token-input';
+sessionTokenInput.value = '';
+document.body.append(accessKeyInput, secretKeyInput, sessionTokenInput);
 window.configSHApiData = null;
 window.configSHStatusApiData = null;
 config.buildConfigSHView();

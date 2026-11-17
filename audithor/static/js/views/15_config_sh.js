@@ -1,3 +1,4 @@
+import { buildCredentialPayload, validateCredentials } from '../credentials.js';
 /**
  * 15_config_sh.js
  * Contains all logic for building and rendering the AWS Config & Security Hub view. (CORREGIDO)
@@ -165,7 +166,7 @@ export const buildConfigSHView = () => {
 
 
 // --- INTERNAL MODULE FUNCTIONS (NOT EXPORTED) ---
-async function runDeepConfigSHAnalysis() {
+export async function runDeepConfigSHAnalysis() {
     const runBtn = document.getElementById('run-deep-scan-btn');
     const btnText = document.getElementById('deep-scan-btn-text');
     const spinner = document.getElementById('deep-scan-spinner');
@@ -186,13 +187,10 @@ async function runDeepConfigSHAnalysis() {
         setHtml(errorContainer, html``);
     }
     log('Starting deep analysis of Config & Security Hub…', 'info');
+    const credentialError = validateCredentials();
 
-    const accessKeyInput = document.getElementById('access-key-input');
-    const secretKeyInput = document.getElementById('secret-key-input');
-    const sessionTokenInput = document.getElementById('session-token-input');
-
-    if (!accessKeyInput || !secretKeyInput) {
-        log('Error: Credential inputs not found', 'error');
+    if (credentialError) {
+        if (errorContainer) { setHtml(errorContainer, html`<p class="text-red-600">${credentialError}</p>`); errorContainer.classList.remove('hidden'); }
         runBtn.disabled = false;
         spinner.classList.add('hidden');
         btnText.textContent = 'Run Deep Dive Analysis';
@@ -200,9 +198,7 @@ async function runDeepConfigSHAnalysis() {
     }
 
     const payload = {
-        access_key: accessKeyInput.value.trim(),
-        secret_key: secretKeyInput.value.trim(),
-        session_token: sessionTokenInput.value.trim() || null,
+        ...buildCredentialPayload(),
     };
 
     try {

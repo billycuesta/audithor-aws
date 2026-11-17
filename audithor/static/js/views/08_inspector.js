@@ -1,3 +1,4 @@
+import { buildCredentialPayload, validateCredentials } from '../credentials.js';
 import { renderCollectionNotice, emptyCollectionMessage, coverageIsComplete, mergeInspectorCoverage } from '../collection.js';
 /**
  * 08_inspector.js
@@ -62,7 +63,7 @@ export const buildInspectorView = () => {
 
 // --- INTERNAL MODULE FUNCTIONS (NOT EXPORTED) ---
 
-const runDeepInspectorAnalysis = async () => {
+export const runDeepInspectorAnalysis = async () => {
     const runBtn = document.getElementById('run-deep-inspector-scan-btn');
     const btnText = document.getElementById('deep-inspector-scan-btn-text');
     const spinner = document.getElementById('deep-inspector-scan-spinner');
@@ -77,13 +78,10 @@ const runDeepInspectorAnalysis = async () => {
         setHtml(errorContainer, html``);
     }
     log('Starting deep search of Inspector findings…', 'info');
+    const credentialError = validateCredentials();
 
-    const accessKeyInput = document.getElementById('access-key-input');
-    const secretKeyInput = document.getElementById('secret-key-input');
-    const sessionTokenInput = document.getElementById('session-token-input');
-
-    if (!accessKeyInput.value.trim() || !secretKeyInput.value.trim()) {
-        const errorMessage = 'Access Key or Secret Key not provided.';
+    if (credentialError) {
+        const errorMessage = credentialError;
         log(`Error in deep Inspector search: ${errorMessage}`, 'error');
         if (errorContainer) {
             setHtml(errorContainer, html`<div class="bg-red-50 text-red-700 p-4 rounded-lg mt-4"><h4 class="font-bold">Error</h4><p>${errorMessage}</p></div>`);
@@ -96,9 +94,7 @@ const runDeepInspectorAnalysis = async () => {
     }
 
     const payload = {
-        access_key: accessKeyInput.value.trim(),
-        secret_key: secretKeyInput.value.trim(),
-        session_token: sessionTokenInput.value.trim() || null,
+        ...buildCredentialPayload(),
     };
 
     try {
