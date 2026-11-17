@@ -3,6 +3,7 @@ import json
 import boto3
 from botocore.exceptions import ClientError
 from .utils import get_all_aws_regions # Importación relativa
+from .diagnostics import classify_error
 
 
 PROTOCOLS = {'-1': 'ALL', '6': 'TCP', '17': 'UDP', '1': 'ICMP'}
@@ -29,6 +30,7 @@ def collect_network_policies_data(session):
     """
     regions = get_all_aws_regions(session)
     result_vpcs, result_acls, result_sgs, result_subnets, result_nat_gateways = [], [], [], [], []
+    enrichment = {"securityGroupRules": {"status": "complete"}, "networkAcls": {"status": "complete"}}
 
     for region in regions:
         try:
@@ -42,12 +44,12 @@ def collect_network_policies_data(session):
             # Collect Network ACLs
             for acl in ec2_client.describe_network_acls().get("NetworkAcls", []):
                 tags = {tag['Key']: tag['Value'] for tag in acl.get('Tags', [])}
-                result_acls.append({"Region": region, "AclId": acl.get("NetworkAclId"), "VpcId": acl.get("VpcId"), "IsDefault": acl.get("IsDefault"), "Tags": tags})
+                result_acls.append({"Region": region, "AclId": acl.get("NetworkAclId"), "VpcId": acl.get("VpcId"), "IsDefault": acl.get("IsDefault"), "Tags": tags, "Entries": acl.get("Entries", []), "SubnetAssociations": acl.get("Associations", []), "Enrichment": {"networkAcls": {"status": "complete"}}})
 
             # Collect Security Groups
             for sg in ec2_client.describe_security_groups().get("SecurityGroups", []):
                 tags = {tag['Key']: tag['Value'] for tag in sg.get('Tags', [])}
-                result_sgs.append({"Region": region, "GroupId": sg.get("GroupId"), "GroupName": sg.get("GroupName"), "VpcId": sg.get("VpcId"), "Description": sg.get("Description"), "Tags": tags})
+                result_sgs.append({"Region": region, "GroupId": sg.get("GroupId"), "GroupName": sg.get("GroupName"), "VpcId": sg.get("VpcId"), "Description": sg.get("Description"), "Tags": tags, "IngressRules": sg.get("IpPermissions", []), "EgressRules": sg.get("IpPermissionsEgress", []), "Enrichment": {"securityGroupRules": {"status": "complete"}}})
 
             # Collect Subnets
             for subnet in ec2_client.describe_subnets().get("Subnets", []):
@@ -69,6 +71,17 @@ def collect_network_policies_data(session):
                             "Tags": tags
                         })
         except ClientError as e:
+            category = classify_error(e)["category"]
+            if e.operation_name == "DescribeSecurityGroups":
+                enrichment["securityGroupRules"] = {"status": "failed", "reason": category}
+            if e.operation_name == "DescribeNetworkAcls":
+                enrichment["networkAcls"] = {"status": "failed", "reason": category}
+            for group in result_sgs:
+                if group["Region"] == region:
+                    group["Enrichment"]["securityGroupRules"] = enrichment["securityGroupRules"]
+            for acl in result_acls:
+                if acl["Region"] == region:
+                    acl["Enrichment"]["networkAcls"] = enrichment["networkAcls"]
             if e.response['Error']['Code'] in ['InvalidClientTokenId', 'UnrecognizedClientException', 'AuthFailure', 'AccessDeniedException', 'OptInRequired']:
                 continue
         except Exception:
@@ -80,7 +93,8 @@ def collect_network_policies_data(session):
         "security_groups": result_sgs,
         "subnets": result_subnets,
         "all_regions": regions,
-        "nat_gateways": result_nat_gateways
+        "nat_gateways": result_nat_gateways,
+        "Enrichment": enrichment
     }
 
 
