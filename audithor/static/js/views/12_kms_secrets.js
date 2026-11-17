@@ -60,10 +60,11 @@ export const buildKmsSecretsView = () => {
   const secrets = hasSecretsData ? window.secretsManagerApiData.results.secrets || [] : [];
   const executionDate = hasKmsData ? window.kmsApiData.metadata.executionDate : hasSecretsData ? window.secretsManagerApiData.metadata.executionDate : 'N/A';
   const customerManagedKeys = kmsKeys.filter(key => key.KeyManager === 'CUSTOMER');
-  const awsManagedKeys = kmsKeys.filter(key => key.KeyManager === 'AWS');
+  const awsManagedKeys = kmsKeys.filter(key => key.KeyManager === 'AWS' || key.KeyManager == null);
+  const hasUnknownKeyManager = awsManagedKeys.some(key => key.KeyManager == null);
   const optionalTabs = [
     ...(hasSecretsData ? [html`<a href="#" data-tab="secrets-manager-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Secrets Manager (${secrets.length})</a>`] : []),
-    ...(hasKmsData ? [html`<a href="#" data-tab="kms-customer-keys-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Customer Keys (${customerManagedKeys.length})</a>`, html`<a href="#" data-tab="kms-aws-keys-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">AWS Keys (${awsManagedKeys.length})</a>`] : [])
+    ...(hasKmsData ? [html`<a href="#" data-tab="kms-customer-keys-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Customer Keys (${customerManagedKeys.length})</a>`, html`<a href="#" data-tab="kms-aws-keys-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">${hasUnknownKeyManager ? 'AWS & Unknown Keys' : 'AWS Keys'} (${awsManagedKeys.length})</a>`] : [])
   ];
   const optionalSections = [
     ...(hasSecretsData ? [html`<div id="secrets-manager-content" class="kms-secrets-tab-content hidden">${renderServiceDescription(serviceDescriptions.secretsOverview)}${renderSecretsManagerTable(secrets)}</div>`] : []),
@@ -437,7 +438,9 @@ const renderKmsKeysTable = (keys, title) => {
       const stateBadge = createKmsStatusBadge(key.Status, 'state');
       const managerBadge = key.KeyManager === 'CUSTOMER'
         ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">CUSTOMER</span>`
-        : html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">AWS</span>`;
+        : key.KeyManager === 'AWS'
+          ? html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">AWS</span>`
+          : html`<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">Unknown</span>`;
 
       return html`
         <tr class="${isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50'}">
@@ -448,6 +451,7 @@ const renderKmsKeysTable = (keys, title) => {
           <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${stateBadge}</td>
           <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${rotationBadge}</td>
           <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${managerBadge}</td>
+          <td class="px-4 py-4 align-top text-sm">Key Spec: ${key.KeySpec ?? 'Not collected'}<br>Key Usage: ${key.KeyUsage ?? 'Not collected'}<br>Encryption Algorithms: ${Array.isArray(key.EncryptionAlgorithms) ? key.EncryptionAlgorithms.join(', ') : key.EncryptionAlgorithms ?? 'Not collected'}</td>
           <td class="px-4 py-4 align-top whitespace-nowrap text-sm">
             <button ${act('openModalWithKmsPolicy', index)} class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition">View Policy</button>
           </td>
@@ -465,6 +469,7 @@ const renderKmsKeysTable = (keys, title) => {
           <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">State</th>
           <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rotation</th>
           <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Manager</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Key Metadata</th>
           <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Key Policy</th>
         </tr></thead>
         <tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody>
