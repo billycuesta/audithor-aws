@@ -2,6 +2,7 @@
 import os
 import ipaddress
 import boto3
+from botocore.session import Session as BotocoreSession
 from botocore.exceptions import BotoCoreError, ClientError, ProfileNotFound
 from .diagnostics import AWS_CONFIG, classify_error
 
@@ -16,12 +17,15 @@ def profiles_enabled():
     except ValueError:
         return False
 
+def _available_profiles():
+    return BotocoreSession().available_profiles
+
 def list_aws_profiles():
     enabled = profiles_enabled()
     if not enabled:
         return {"profiles": [], "default": None, "enabled": False}
     try:
-        profiles = sorted(boto3.Session().available_profiles)
+        profiles = sorted(_available_profiles())
         preferred = os.environ.get("AWS_PROFILE")
         default = preferred if preferred in profiles else "default" if "default" in profiles else None
         return {"profiles": profiles, "default": default, "enabled": True}
@@ -38,7 +42,7 @@ def get_session(data, raise_errors=False):
         if profile_mode:
             if not profiles_enabled():
                 return None, PROFILE_FORBIDDEN
-            available = boto3.Session().available_profiles
+            available = _available_profiles()
             if profile not in available:
                 return None, f"Unknown AWS profile: {profile}"
             session = boto3.Session(profile_name=profile)

@@ -30,6 +30,24 @@ def test_profile_default_resolution(aws_files, monkeypatch):
     monkeypatch.setenv('AWS_PROFILE', 'audit')
     assert utils.list_aws_profiles()['default'] == 'audit'
 
+@pytest.mark.parametrize('bad_default', ['', 'nonexistent'])
+def test_bad_aws_profile_environment_does_not_hide_profiles(aws_files, monkeypatch, bad_default):
+    monkeypatch.setenv('AWS_PROFILE', bad_default)
+    result = utils.list_aws_profiles()
+    assert result['profiles'] == ['audit', 'default', 'role-x', 'sso-dev']
+    assert result['default'] == 'default'
+    calls = []
+    class STS:
+        def get_caller_identity(self): return {'Account': '123'}
+    class Session:
+        def __init__(self, **kwargs): calls.append(kwargs)
+        def client(self, service, **kwargs): return STS()
+    monkeypatch.setattr(utils.boto3, 'Session', Session)
+    session, error = utils.get_session({'profile': 'audit'})
+    assert error is None
+    assert calls == [{'profile_name': 'audit'}]
+    assert session._audithor_account_id == '123'
+
 def test_nonloopback_blocks_profiles(aws_files, monkeypatch):
     monkeypatch.setenv('AUDITHOR_HOST', '0.0.0.0')
     client = make_client(app)
@@ -56,7 +74,7 @@ def test_profile_session_sts(aws_files, monkeypatch):
         def client(self, service, **kwargs): assert service == 'sts'; return STS()
     monkeypatch.setattr(utils.boto3, 'Session', Session)
     session, error = utils.get_session({'profile':'audit'})
-    assert error is None and calls == [{}, {'profile_name':'audit'}]
+    assert error is None and calls == [{'profile_name':'audit'}]
     assert session._audithor_account_id == '123'
 
 def test_sso_message_safe(aws_files, monkeypatch):
