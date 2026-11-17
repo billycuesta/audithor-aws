@@ -11,6 +11,8 @@ import boto3
 from botocore.exceptions import ClientError
 from .utils import get_all_aws_regions # Importación relativa
 from . import iam # Se importa para la comprobación de permisos de roles
+from datetime import datetime, timedelta, timezone
+from .diagnostics import AWS_ERRORS, classify_error
 
 def collect_compute_data(session):
     """
@@ -82,6 +84,7 @@ def collect_compute_data(session):
 
             # --- 2. Collect Lambda Function Data ---
             lambda_paginator = lambda_client.get_paginator("list_functions")
+            region_lambdas = []
             for page in lambda_paginator.paginate():
                 for function in page.get("Functions", []):
                     function_arn = function.get("FunctionArn")
@@ -94,7 +97,7 @@ def collect_compute_data(session):
                         pass
                     
                     vpc_config = function.get("VpcConfig", {})
-                    result_lambda_functions.append({
+                    lambda_record = {
                         "Region": region,
                         "FunctionName": function.get("FunctionName"),
                         "Role": function.get("Role"), # <-- NUEVO CAMPO AÑADIDO
@@ -109,7 +112,53 @@ def collect_compute_data(session):
                         },
                         "Tags": tags_dict,
                         "ARN": function_arn
-                    })
+                    }
+                    result_lambda_functions.append(lambda_record)
+                    region_lambdas.append(lambda_record)
+
+            try:
+                cloudwatch_client = session.client("cloudwatch", region_name=region)
+                query_functions = {f"f{index}": function for index, function in enumerate(region_lambdas)}
+                queries = [{
+                    "Id": query_id,
+                    "MetricStat": {
+                        "Metric": {
+                            "Namespace": "AWS/Lambda",
+                            "MetricName": "Invocations",
+                            "Dimensions": [{"Name": "FunctionName", "Value": function["FunctionName"]}]
+                        },
+                        "Period": 86400,
+                        "Stat": "Sum"
+                    },
+                    "ReturnData": True
+                } for query_id, function in query_functions.items()]
+                metric_results = {}
+                for offset in range(0, len(queries), 500):
+                    request = {
+                        "MetricDataQueries": queries[offset:offset + 500],
+                        "StartTime": datetime.now(timezone.utc) - timedelta(days=90),
+                        "EndTime": datetime.now(timezone.utc)
+                    }
+                    while True:
+                        response = cloudwatch_client.get_metric_data(**request)
+                        for metric_result in response.get("MetricDataResults", []):
+                            metric_results.setdefault(metric_result.get("Id"), []).append(metric_result)
+                        next_token = response.get("NextToken")
+                        if not next_token:
+                            break
+                        request["NextToken"] = next_token
+                for query_id, function in query_functions.items():
+                    points = [(timestamp, value) for batch in metric_results.get(query_id, [])
+                              for timestamp, value in zip(batch.get("Timestamps", []), batch.get("Values", []))]
+                    invocations = sum(value for _, value in points)
+                    last_invocation = max((timestamp for timestamp, value in points if value > 0), default=None)
+                    function["Invocations90d"] = invocations
+                    function["LastInvocationDate"] = last_invocation.date().isoformat() if last_invocation else None
+                    function.setdefault("Enrichment", {})["activity"] = {"status": "complete"}
+            except AWS_ERRORS as exc:
+                reason = classify_error(exc)["category"]
+                for function in region_lambdas:
+                    function.setdefault("Enrichment", {})["activity"] = {"status": "failed", "reason": reason}
 
             # --- 3. Recolectar datos de EKS ---
             eks_paginator = eks_client.get_paginator('list_clusters')
