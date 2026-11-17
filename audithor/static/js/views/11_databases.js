@@ -257,16 +257,28 @@ const renderDynamoDbTable = (tables) => {
         const copyButton = t.ARN
             ? html`<button ${act('copyToClipboard', ACT_THIS, t.ARN)} title="${t.ARN}" class="p-1 rounded-md hover:bg-gray-200 transition">${copyIcon}</button>`
             : html`<button disabled title="ARN is unavailable" class="p-1 rounded-md hover:bg-gray-200 transition">${copyIcon}</button>`;
+        const collected = group => t.Enrichment?.[group]?.status === 'complete';
+        const keySchema = Array.isArray(t.KeySchema) ? t.KeySchema.map(key => `${key.AttributeName ?? ''} (${key.KeyType ?? ''})`).join(', ') : 'Not collected';
+        const ttl = collected('ttl') ? `${t.TTL?.TimeToLiveStatus ?? 'Unknown'}${t.TTL?.AttributeName ? ` · ${t.TTL.AttributeName}` : ''}` : 'Not collected';
+        const pitr = collected('pitr') ? (t.PITR?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus ?? t.PITR?.PointInTimeRecoveryStatus ?? 'Not enabled') : 'Not collected';
+        const backups = collected('backups') ? (t.Backups ?? []).map(backup => {
+            const name = backup.BackupName ?? backup.BackupArn ?? 'Backup';
+            const type = backup.BackupType ?? 'Unknown type';
+            const created = backup.BackupCreationDateTime ? String(backup.BackupCreationDateTime).slice(0, 10) : 'Unknown date';
+            return `${name} (${type}, ${created})`;
+        }).join(', ') || 'None' : 'Not collected';
         return html`<tr class="${isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50'}">
             <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${t.Region}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${t.TableName}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm">${createEncryptionBadge(t.Encrypted)}</td>
             <td class="px-4 py-4 text-sm text-gray-600 font-mono break-all">${t.KmsKeyAlias ?? 'Unknown'}</td>
+            <td class="px-4 py-4 text-sm">${keySchema}</td><td class="px-4 py-4 text-sm">${t.DeletionProtectionEnabled == null ? 'Not collected' : (t.DeletionProtectionEnabled ? 'Enabled' : 'Disabled')}</td>
+            <td class="px-4 py-4 text-sm">${ttl}</td><td class="px-4 py-4 text-sm">${pitr}</td><td class="px-4 py-4 text-sm">${backups}</td>
             <td class="px-4 py-4 text-center">${copyButton}</td>
         </tr>`;
     });
-    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th> <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th> <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Table Name</th> <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Encrypted</th> <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">KMS Key Alias/Type</th> <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">ARN</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`;
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th> <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th> <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Table Name</th> <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Encrypted</th> <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">KMS Key Alias/Type</th> <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Key Schema</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Deletion Protection</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">TTL</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PITR</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Backups</th> <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">ARN</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`;
 };
 
 // ===== DOCUMENTDB =====
