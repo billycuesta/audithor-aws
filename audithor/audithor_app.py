@@ -33,32 +33,6 @@ from .collectors import (
 
 
 
-def get_boto_session(access_key, secret_key, session_token=None):
-    """Creates and returns a Boto3 session from credentials."""
-    try:
-        # If the session token is empty or None, don't include it
-        if session_token:
-            session = boto3.Session(
-                aws_access_key_id=access_key,
-                aws_secret_access_key=secret_key,
-                aws_session_token=session_token
-            )
-        else:
-            session = boto3.Session(
-                aws_access_key_id=access_key,
-                aws_secret_access_key=secret_key
-            )
-        
-        # Verify that the credentials are valid by making a simple call
-        sts_client = session.client('sts')
-        sts_client.get_caller_identity()
-        
-        return session
-    except (BotoCoreError, ClientError) as e:
-        # If credentials are invalid or another error occurs, return None
-        print(f"[ERROR] Boto3 session could not be created: {e}")
-        return None
-
 
 # ==============================================================================
 # CONF. APLICACIÓN FLASK
@@ -163,7 +137,7 @@ def dashboard():
 @app.route('/api/run-iam-audit', methods=['POST'])
 def run_iam_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         iam_results = iam.collect_iam_data(session)
         iam_results["users"] = iam.check_critical_permissions(session, iam_results["users"])
@@ -175,7 +149,7 @@ def run_iam_audit():
 @app.route('/api/run-securityhub-audit', methods=['POST'])
 def run_securityhub_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         all_regions = utils.get_all_aws_regions(session)
         service_status = securityhub.check_security_hub_status_in_regions(session, all_regions)
@@ -189,7 +163,7 @@ def run_securityhub_audit():
 @app.route('/api/run-exposure-audit', methods=['POST'])
 def run_exposure_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         exposure_results = exposure.collect_exposure_data(session)
         exposure_results["lambda_credentials"] = exposure.scan_lambda_credentials(session)
@@ -201,7 +175,7 @@ def run_exposure_audit():
 @app.route('/api/run-guardduty-audit', methods=['POST'])
 def run_guardduty_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         guardduty_results = guardduty.collect_guardduty_data(session)
         sts = session.client("sts")
@@ -212,7 +186,7 @@ def run_guardduty_audit():
 @app.route('/api/run-waf-audit', methods=['POST'])
 def run_waf_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         waf_results = waf.collect_waf_data(session)
         sts = session.client("sts")
@@ -223,7 +197,7 @@ def run_waf_audit():
 @app.route('/api/run-cloudtrail-lookup', methods=['POST'])
 def run_cloudtrail_lookup():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     
     data = request.get_json()
     event_name = data.get('event_name')
@@ -249,13 +223,25 @@ def run_cloudtrail_lookup():
 @app.route('/api/run-cloudwatch-audit', methods=['POST'])
 def run_cloudwatch_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         cloudwatch_results = cloudwatch.collect_cloudwatch_data(session)
         sts = session.client("sts")
         return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": cloudwatch_results })
     except Exception as e:
         return _error_response(e, "Unexpected error while collecting CloudWatch/SNS data:", 500)
+
+@app.route('/api/aws-profiles', methods=['POST'])
+def aws_profiles():
+    return jsonify(utils.list_aws_profiles())
+
+
+def _session_error_status(error):
+    if error == utils.PROFILE_FORBIDDEN:
+        return 403
+    if error and error.startswith("Unknown AWS profile:"):
+        return 400
+    return 401
 
 def collection_response(collector):
     scan_id = str(uuid.uuid4())
@@ -273,9 +259,13 @@ def collection_response(collector):
     except AWS_ERRORS as exc:
         diagnostic = classify_error(exc)
         collection_logger.warning(json.dumps({"event": "collection.session_failed", "scanId": scan_id, **diagnostic}))
-        code = 401 if diagnostic["category"] == "authentication_error" else 403 if diagnostic["category"] == "permission_denied" else 503
-        return jsonify({"error": "AWS session validation failed", "scanId": scan_id,
-                        "category": diagnostic["category"]}), code
+        category = diagnostic["category"]
+        code = 401 if category in {"authentication_error", "sso_login_required", "profile_not_found"} else 403 if category == "permission_denied" else 503
+        error = utils.sso_login_message(data["profile"]) if category == "sso_login_required" and isinstance(data.get("profile"), str) else "AWS session validation failed"
+        return jsonify({"error": error, "scanId": scan_id,
+                        "category": category}), code
+    if error:
+        return jsonify({"error": error, "scanId": scan_id}), _session_error_status(error)
     session._audithor_scan_id = scan_id
     session._audithor_request_id = str(uuid.uuid4())
     try:
@@ -307,7 +297,7 @@ def run_acm_audit():
 @app.route('/api/run-compute-audit', methods=['POST'])
 def run_compute_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         compute_results = compute.collect_compute_data(session)
         sts = session.client("sts")
@@ -323,7 +313,7 @@ def run_databases_audit():
 @app.route('/api/run-network-policies-audit', methods=['POST'])
 def run_network_policies_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         network_policies_results = network_policies.collect_network_policies_data(session)
         sts = session.client("sts")
@@ -334,7 +324,7 @@ def run_network_policies_audit():
 @app.route('/api/run-config-sh-audit', methods=['POST'])
 def run_config_sh_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         results = config_sh.collect_config_sh_data(session)
         sts = session.client("sts")
@@ -345,7 +335,7 @@ def run_config_sh_audit():
 @app.route('/api/run-config-sh-status-audit', methods=['POST'])
 def run_config_sh_status_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         results = config_sh.collect_config_sh_status_only(session)
         sts = session.client("sts")
@@ -366,13 +356,9 @@ def handle_network_detail_audit():
         if not data:
             return jsonify({"error": "Invalid request: No JSON payload found."}), 400
 
-        access_key = data.get('access_key')
-        secret_key = data.get('secret_key')
-        session_token = data.get('session_token')
-
-        session = get_boto_session(access_key, secret_key, session_token)
-        if not session:
-            return jsonify({"error": "Failed to create AWS session from provided credentials."}), 500
+        session, error = utils.get_session(data)
+        if error:
+            return jsonify({"error": error}), _session_error_status(error)
 
         # Extraemos el ID y la región del cuerpo de la petición
         resource_id = data.get('resource_id')
@@ -400,7 +386,7 @@ def handle_network_detail_audit():
 @app.route('/api/run-connectivity-audit', methods=['POST'])
 def run_connectivity_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         connectivity_results = connectivity.collect_connectivity_data(session)
         sts = session.client("sts")
@@ -411,7 +397,7 @@ def run_connectivity_audit():
 @app.route('/api/run-playground-audit', methods=['POST'])
 def run_playground_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         data = request.get_json()
         source_arn = data.get('source_arn')
@@ -431,7 +417,7 @@ def run_playground_audit():
 @app.route('/api/run-kms-audit', methods=['POST'])
 def run_kms_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         kms_results = kms.collect_kms_data(session)
         sts = session.client("sts")
@@ -486,7 +472,7 @@ def run_executive_summary():
 @app.route('/api/run-federation-audit', methods=['POST'])
 def run_federation_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         federation_results = iam.collect_federation_data(session)
         sts = session.client("sts")
@@ -497,7 +483,7 @@ def run_federation_audit():
 @app.route('/api/run-access-analyzer-audit', methods=['POST'])
 def run_access_analyzer_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         analyzer_results = iam.collect_access_analyzer_data(session)
         sts = session.client("sts")
@@ -513,7 +499,7 @@ def run_inspector_findings_audit():
 @app.route('/api/get-sso-group-members', methods=['POST'])
 def get_sso_group_members_endpoint():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     
     data = request.get_json()
     group_id = data.get('group_id')
@@ -529,7 +515,7 @@ def get_sso_group_members_endpoint():
 @app.route('/api/run-cloudtrail-audit', methods=['POST'])
 def run_cloudtrail_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         # Esta función ahora devuelve trails, events y trailguard_findings
         cloudtrail_results = cloudtrail.collect_cloudtrail_data(session)
@@ -541,7 +527,7 @@ def run_cloudtrail_audit():
 @app.route('/api/run-ecr-audit', methods=['POST'])
 def run_ecr_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         ecr_results = ecr.collect_ecr_data(session)
         sts = session.client("sts")
@@ -552,7 +538,7 @@ def run_ecr_audit():
 @app.route('/api/run-simulate-policy', methods=['POST'])
 def run_simulate_policy():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     
     try:
         data = request.get_json()
@@ -589,7 +575,7 @@ def run_simulate_policy():
 @app.route('/api/run-simulate-lambda-policy', methods=['POST'])
 def run_simulate_lambda_policy():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     
     try:
         data = request.get_json()
@@ -617,7 +603,7 @@ def run_simulate_lambda_policy():
 @app.route('/api/run-codepipeline-audit', methods=['POST'])
 def run_codepipeline_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         codepipeline_results = codepipeline.collect_codepipeline_data(session)
         sts = session.client("sts")
@@ -629,7 +615,7 @@ def run_codepipeline_audit():
 @app.route('/api/run-inventory-audit', methods=['POST'])
 def run_inventory_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         inventory_results = inventory.collect_inventory_summary(session)
         sts = session.client("sts")
@@ -644,7 +630,7 @@ def get_user_assumable_roles_endpoint():
     Endpoint para obtener roles asumibles de un usuario específico bajo demanda.
     """
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     
     data = request.get_json()
     username = data.get('username')
@@ -665,7 +651,7 @@ def analyze_custom_policy_endpoint():
     Endpoint para analizar una política custom específica.
     """
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     
     data = request.get_json()
     policy_name = data.get('policy_name')
@@ -683,7 +669,7 @@ def analyze_custom_policy_endpoint():
 @app.route('/api/run-s3-security-check', methods=['POST'])
 def run_s3_security_check():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     
     data = request.get_json()
     bucket_name = data.get('bucket_name')
@@ -878,7 +864,7 @@ def run_s3_security_check():
 @app.route('/api/run-secrets-manager-audit', methods=['POST'])
 def run_secrets_manager_audit():
     session, error = utils.get_session(request.get_json())
-    if error: return jsonify({"error": error}), 401
+    if error: return jsonify({"error": error}), _session_error_status(error)
     try:
         secrets_results = secrets_manager.collect_secrets_manager_data(session)
         sts = session.client("sts")

@@ -8,11 +8,14 @@ from audithor.collectors import cloudwatch
 
 
 class Session:
+    regional_clients = {}
     def __init__(self, clients):
         self.clients = clients
     def get_credentials(self):
         return Mock(access_key='a', secret_key='b', token='c')
     def client(self, service, **kwargs):
+        if kwargs.get('region_name'):
+            return self.regional_clients[service]
         return self.clients[service]
 
 
@@ -29,6 +32,7 @@ def test_collects_log_groups_filters_and_all_topic_subscriptions(monkeypatch):
     cw = Mock()
     cw.get_paginator.return_value.paginate.return_value = [{'MetricAlarms': []}]
     monkeypatch.setattr(cloudwatch, 'get_all_aws_regions', lambda _: ['us-east-1'])
+    Session.regional_clients = {'logs': logs, 'sns': sns, 'cloudwatch': cw}
     monkeypatch.setattr(cloudwatch.boto3, 'Session', lambda **kwargs: Session({'logs': logs, 'sns': sns, 'cloudwatch': cw}))
     result = cloudwatch.collect_cloudwatch_data(Session({}))
     assert result['alarms'] == []
@@ -68,6 +72,7 @@ def test_log_group_access_denied_records_enrichment_failure(monkeypatch):
     cw = Mock()
     cw.get_paginator.return_value.paginate.return_value = [{'MetricAlarms': []}]
     monkeypatch.setattr(cloudwatch, 'get_all_aws_regions', lambda _: ['us-east-1'])
+    Session.regional_clients = {'logs': logs, 'sns': sns, 'cloudwatch': cw}
     monkeypatch.setattr(cloudwatch.boto3, 'Session', lambda **kwargs: Session({'logs': logs, 'sns': sns, 'cloudwatch': cw}))
     result = cloudwatch.collect_cloudwatch_data(Session({}))
     assert result['alarms'] == [] and len(result['topics']) == 1
@@ -82,6 +87,7 @@ def test_describe_log_groups_stubbed_through_collector(monkeypatch):
     sns = Mock(); sns.get_paginator.return_value.paginate.return_value = []
     cw = Mock(); cw.get_paginator.return_value.paginate.return_value = [{'MetricAlarms': []}]
     monkeypatch.setattr(cloudwatch, 'get_all_aws_regions', lambda _: ['us-east-1'])
+    Session.regional_clients = {'logs': client, 'sns': sns, 'cloudwatch': cw}
     monkeypatch.setattr(cloudwatch.boto3, 'Session', lambda **kwargs: Session({'logs': client, 'sns': sns, 'cloudwatch': cw}))
     with Stubber(client) as stub:
         stub.add_response('describe_log_groups', {'logGroups': [{'logGroupName':'stub', 'creationTime':123, 'storedBytes':0, 'kmsKeyId':'key', 'retentionInDays':7}], 'nextToken':'next'})
