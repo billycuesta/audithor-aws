@@ -59,6 +59,21 @@ def test_dashboard_has_two_hidden_scan_progress_blocks_without_inline_handlers()
     assert not re.search(r"\son[a-z]+\s*=", html, re.IGNORECASE)
 
 
+def test_credential_mode_controls_exist_in_both_forms_without_inline_handlers():
+    template = Path(__file__).resolve().parents[1] / "audithor/templates/dashboard.html"
+    html = template.read_text()
+    for prefix in ("", "landing-"):
+        assert f'id="{prefix}credential-mode-keys"' in html
+        assert f'id="{prefix}credential-mode-profile"' in html
+        assert f'id="{prefix}aws-profile-select"' in html
+        refresh = re.search(rf'<button[^>]*id="{prefix}aws-profile-refresh"[^>]*>', html)
+        assert refresh and 'aria-label="Refresh AWS profiles"' in refresh.group(0)
+        assert html.count('role="radiogroup"') == 2
+        assert html.count('role="radio"') == 4
+    assert 'From ~/.aws/credentials and ~/.aws/config' in html
+    assert not re.search(r"\son[a-z]+\s*=", html, re.IGNORECASE)
+
+
 def test_dashboard_and_vendored_tailwind_are_served_by_flask():
     from audithor import audithor_app
     from conftest import make_client

@@ -39,6 +39,7 @@ const BASE = resolveBackendBase();
 // 3) ENDPOINTS DE API
 // =====================================================
 const API = {
+  AWS_PROFILES:           `${BASE}/api/aws-profiles`,
   // BULK JOBS
   BULK_RUN:             `${BASE}/api/run-bulk-audit`,
   JOB_STATUS: (id) =>   `${BASE}/api/scan/status/${encodeURIComponent(id)}`,
