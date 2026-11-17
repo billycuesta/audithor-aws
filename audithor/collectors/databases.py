@@ -124,6 +124,18 @@ def collect_database_data(session):
         # 4) DynamoDB (ajuste de indentación + alias KMS si aplica)
         # ==================================================================
         if region in regions_by_service["dynamodb"]:
+            backups_by_table = {}
+            try:
+                backup_paginator = dynamodb_client.get_paginator("list_backups")
+                for page in backup_paginator.paginate(BackupType="ALL"): 
+                    for backup in page.get("BackupSummaries", []):
+                        backups_by_table.setdefault(backup.get("TableName"), []).append(backup)
+            except AWS_ERRORS as exc:
+                diagnostics.failure(exc, "dynamodb", region, "list_backups", impact="enrichment")
+                backup_error = classify_error(exc)["category"]
+            else:
+                diagnostics.record("dynamodb", region, "list_backups", "complete", impact="enrichment")
+                backup_error = None
             with diagnostics.operation("dynamodb", region, "list_tables"):
                 dynamo_paginator = dynamodb_client.get_paginator("list_tables")
                 stop_details = False
@@ -143,6 +155,24 @@ def collect_database_data(session):
                                 stop_details = True
                                 break
                             continue
+                        table_enrichment = {}
+                        enrichment_values = {}
+                        for group, operation, call in (
+                            ("ttl", "describe_time_to_live", dynamodb_client.describe_time_to_live),
+                            ("pitr", "describe_continuous_backups", dynamodb_client.describe_continuous_backups),
+                        ):
+                            try:
+                                response = call(TableName=table_name)
+                                diagnostics.record("dynamodb", region, operation, "complete", impact="enrichment", resourceId=table_name)
+                                enrichment_values[group] = response.get("TimeToLiveDescription" if group == "ttl" else "ContinuousBackupsDescription", {})
+                                table_enrichment[group] = {"status": "complete"}
+                            except AWS_ERRORS as exc:
+                                diagnostics.failure(exc, "dynamodb", region, operation, impact="enrichment", resourceId=table_name)
+                                table_enrichment[group] = {"status": "failed", "reason": classify_error(exc)["category"]}
+                        if backup_error:
+                            table_enrichment["backups"] = {"status": "failed", "reason": backup_error}
+                        else:
+                            table_enrichment["backups"] = {"status": "complete"}
                         sse_details = details.get("SSEDescription")
                         kms_key_arn = sse_details.get("KMSMasterKeyArn") if sse_details else None
                         key_id_for_lookup = kms_key_arn.split("/")[-1] if kms_key_arn else None
@@ -162,6 +192,12 @@ def collect_database_data(session):
                                 "KmsKeyId": key_id_for_lookup,
                                 "KmsKeyAlias": alias,
                                 "ARN": details.get("TableArn"),
+                                "KeySchema": details.get("KeySchema", []),
+                                "DeletionProtectionEnabled": details.get("DeletionProtectionEnabled", False),
+                                "TTL": enrichment_values.get("ttl", {}),
+                                "PITR": enrichment_values.get("pitr", {}),
+                                "Backups": backups_by_table.get(table_name, []),
+                                "Enrichment": table_enrichment,
                             }
                         )
                     if stop_details:
