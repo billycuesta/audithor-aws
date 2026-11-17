@@ -1,5 +1,10 @@
 import boto3
-from botocore.exceptions import ClientError
+import json
+from urllib.parse import unquote
+from botocore.exceptions import BotoCoreError, ClientError
+from .diagnostics import classify_error
+
+AWS_ERRORS = (BotoCoreError, ClientError)
 from .utils import get_all_aws_regions  # Relative import
 
 
@@ -51,6 +56,14 @@ def detect_privileges(users, roles, groups, session):
         evidence = [f"Attached Policy: {p}" for p in group["AttachedPolicies"] if p in dangerous_policies]
         if evidence:
             group["IsPrivileged"], group["PrivilegeReasons"] = True, list(set(evidence))
+
+
+def _policy_document(document):
+    if isinstance(document, dict):
+        return document
+    if isinstance(document, str):
+        return json.loads(unquote(document))
+    return document
 
 
 def collect_iam_data(session):
@@ -120,16 +133,51 @@ def collect_iam_data(session):
     root_mfa_status = check_root_mfa_status(session)
     password_policy["RootMFAStatus"] = root_mfa_status
 
-    # Resto del código igual...
-    for role in client.list_roles()["Roles"]:
-        result_roles.append({
-            "RoleName": role["RoleName"], 
-            "CreateDate": str(role["CreateDate"]),
-            "AttachedPolicies": [p["PolicyName"] for p in client.list_attached_role_policies(RoleName=role["RoleName"])["AttachedPolicies"]],
-            "InlinePolicies": client.list_role_policies(RoleName=role["RoleName"])["PolicyNames"],
-            "IsPrivileged": False, 
-            "PrivilegeReasons": []
-        })
+    # Reuse one account-level inventory for role policy documents and managed policy versions.
+    try:
+        pages = client.get_paginator("get_account_authorization_details").paginate(Filter=["Role", "LocalManagedPolicy"])
+        role_details, policies = [], []
+        for page in pages:
+            role_details.extend(page.get("RoleDetailList", []))
+            policies.extend(page.get("Policies", []))
+        policies_by_arn = {policy.get("Arn"): policy for policy in policies}
+        for role in role_details:
+            inline_policies = [{"PolicyName": policy["PolicyName"], "PolicyDocument": _policy_document(policy["PolicyDocument"])}
+                               for policy in role.get("RolePolicyList", [])]
+            customer_policies = []
+            attached = role.get("AttachedPolicies", [])
+            for attached_policy in attached:
+                policy = policies_by_arn.get(attached_policy.get("PolicyArn"))
+                if not policy:
+                    continue
+                default_version = next((version for version in policy.get("PolicyVersionList", []) if version.get("IsDefaultVersion")), None)
+                if default_version:
+                    customer_policies.append({"PolicyName": attached_policy["PolicyName"], "PolicyArn": attached_policy["PolicyArn"],
+                                              "DefaultVersionId": default_version["VersionId"],
+                                              "PolicyDocument": _policy_document(default_version["Document"])})
+            result_roles.append({"RoleName": role["RoleName"], "CreateDate": str(role.get("CreateDate")),
+                                 "AttachedPolicies": [policy["PolicyName"] for policy in attached],
+                                 "InlinePolicies": [policy["PolicyName"] for policy in inline_policies],
+                                 "InlinePolicyDocuments": inline_policies, "CustomerManagedPolicies": customer_policies,
+                                 "Enrichment": {"policyDocuments": {"status": "complete"}},
+                                 "IsPrivileged": False, "PrivilegeReasons": []})
+    except AWS_ERRORS as exc:
+        try:
+            fallback_roles = client.list_roles()["Roles"]
+        except AWS_ERRORS:
+            fallback_roles = []
+        category = classify_error(exc)["category"]
+        for role in fallback_roles:
+            try:
+                attached_policies = [p["PolicyName"] for p in client.list_attached_role_policies(RoleName=role["RoleName"])["AttachedPolicies"]]
+                inline_policy_names = client.list_role_policies(RoleName=role["RoleName"])["PolicyNames"]
+            except AWS_ERRORS:
+                attached_policies, inline_policy_names = [], []
+            result_roles.append({"RoleName": role["RoleName"], "CreateDate": str(role["CreateDate"]),
+                                 "AttachedPolicies": attached_policies, "InlinePolicies": inline_policy_names,
+                                 "InlinePolicyDocuments": [],
+                                 "CustomerManagedPolicies": [], "Enrichment": {"policyDocuments": {"status": "failed", "reason": category}},
+                                 "IsPrivileged": False, "PrivilegeReasons": []})
 
     for group in client.list_groups()["Groups"]:
         result_groups.append({
