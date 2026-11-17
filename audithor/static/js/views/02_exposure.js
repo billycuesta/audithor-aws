@@ -98,6 +98,8 @@ export const buildExposureView = () => {
         tabs.push(html`<a href="#" data-tab="exposure-${safeId}-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">${service} (${count})</a>`);
     });
 
+    tabs.push(html`<a href="#" data-tab="exposure-cloudfront-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">CloudFront Distributions</a>`);
+    tabs.push(html`<a href="#" data-tab="exposure-api-domains-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">API Custom Domains</a>`);
     tabs.push(html`<a href="#" data-tab="exposure-network-ports-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Publicly Exposed Network Ports (${networkPorts.length})</a>`);
     tabs.push(html`<a href="#" data-tab="exposure-securityhub-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Security Hub Findings</a>`);
 
@@ -108,6 +110,8 @@ export const buildExposureView = () => {
         content.push(html`<div id="exposure-${safeId}-content" class="exposure-tab-content hidden"></div>`);
     });
 
+    content.push(html`<div id="exposure-cloudfront-content" class="exposure-tab-content hidden">${renderCloudFrontTable(details['CloudFront Distributions']?.Global, window.exposureApiData.results.Enrichment?.cloudFront)}</div>`);
+    content.push(html`<div id="exposure-api-domains-content" class="exposure-tab-content hidden">${renderApiDomainsTable(details['API Custom Domains'], window.exposureApiData.results.Enrichment?.apiDomains)}</div>`);
     content.push(html`<div id="exposure-network-ports-content" class="exposure-tab-content hidden"></div>`);
     content.push(html`<div id="exposure-securityhub-content" class="exposure-tab-content hidden">${createExposureSecurityHubHtml()}</div>`);
 
@@ -213,6 +217,28 @@ export const buildExposureView = () => {
 };
 
 // --- SERVICE DESCRIPTION RENDERER ---
+const renderCloudFrontTable = (items, enrichment) => {
+    if (!enrichment) return html`<p class="text-gray-500">Not collected</p>`;
+    if (enrichment.status !== 'complete') return html`<p class="text-gray-500">Not collected: ${enrichment.reason || 'unknown'}</p>`;
+    if (!items?.length) return html`<p class="text-gray-500">None found</p>`;
+    const rows = items.map(item => {
+        const viewerPolicy = item.DefaultCacheBehaviorViewerProtocolPolicy || 'Not collected';
+        const viewerRisk = ['allow-all', 'http-only'].includes(viewerPolicy) ? 'Risk: HTTP allowed' : 'Secure';
+        const origins = (item.Origins || []).map(origin => `${origin.DomainName || 'Not collected'} (${origin.OriginType || 'Not collected'}; origin protocol: ${origin.OriginProtocolPolicy || 'N/A'}; OAC: ${origin.OriginAccessControlPresent ? 'present' : 'absent'}; OAI: ${origin.OriginAccessIdentityPresent ? 'present' : 'absent'})`).join('; ') || 'None';
+        const behaviors = (item.CacheBehaviors || []).map(behavior => `${behavior.PathPattern}: ${behavior.ViewerProtocolPolicy}${['allow-all', 'http-only'].includes(behavior.ViewerProtocolPolicy) ? ' (Risk: HTTP allowed)' : ''}`).join('; ') || 'None';
+        return html`<tr><td class="px-4 py-3">${item.Id || 'Not collected'}</td><td class="px-4 py-3">${item.DomainName || 'Not collected'}</td><td class="px-4 py-3">${(item.Aliases || []).join(', ') || 'None'}</td><td class="px-4 py-3">${viewerPolicy} — ${viewerRisk}</td><td class="px-4 py-3">${item.ViewerCertificateMinimumProtocolVersion || 'Not collected'}</td><td class="px-4 py-3">${item.WebACLId || 'No WAF'}</td><td class="px-4 py-3">${origins}</td><td class="px-4 py-3">${behaviors}</td></tr>`;
+    });
+    return html`<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead><tr><th>Distribution</th><th>Domain</th><th>Aliases</th><th>Default viewer policy</th><th>Minimum TLS</th><th>WAF</th><th>Origins</th><th>Cache behaviors</th></tr></thead><tbody>${join(rows)}</tbody></table></div>`;
+};
+
+const renderApiDomainsTable = (byRegion, enrichment) => {
+    const items = Object.entries(byRegion || {}).flatMap(([region, domains]) => domains.map(domain => ({region, domain})));
+    const rows = items.map(({region, domain}) => html`<tr><td class="px-4 py-3">${region}</td><td class="px-4 py-3">${domain.DomainName || 'Not collected'}</td><td class="px-4 py-3">${domain.SecurityPolicy || 'Not collected'}</td><td class="px-4 py-3">${domain.EndpointType || 'Not collected'}</td><td class="px-4 py-3">${(domain.Mappings || []).map(m => `${m.BasePath ?? m.ApiMappingKey ?? ''} -> ${m.RestApiId ?? m.ApiId ?? 'Not collected'}/${m.Stage || 'Not collected'}`).join('; ') || 'None'}</td></tr>`);
+    const failed = Object.entries(enrichment?.regions || {}).flatMap(([region, versions]) => Object.entries(versions).filter(([, status]) => status.status !== 'complete').map(([version, status]) => `Not collected: ${region} ${version} ${status.reason || 'unknown'}`));
+    const emptyLabel = !enrichment ? 'Not collected' : failed.length ? join(failed.map(reason => html`<span>${reason}</span>`)) : 'None found';
+    return html`<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead><tr><th>Region</th><th>Domain</th><th>TLS policy</th><th>Endpoint type</th><th>Mappings</th></tr></thead><tbody>${rows.length ? join(rows) : html`<tr><td colspan="5">${emptyLabel}</td></tr>`}</tbody></table>${rows.length && failed.length ? html`<div class="text-sm text-gray-500">${join(failed.map(reason => html`<p>${reason}</p>`))}</div>` : ''}</div>`;
+};
+
 const renderServiceDescription = (serviceInfo) => html`
         <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
             <h3 class="text-lg font-semibold text-gray-800 mb-3">${serviceInfo.title}</h3>

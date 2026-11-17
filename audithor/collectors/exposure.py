@@ -4,6 +4,7 @@ import threading
 from botocore.exceptions import ClientError
 from collections import defaultdict
 from .utils import get_all_aws_regions # Relative import
+from .diagnostics import AWS_ERRORS, classify_error
 
 EXPOSURE_SERVICES = {
     "S3 Public Buckets": "s3",
@@ -323,6 +324,56 @@ def collect_exposure_data(session):
         >>> exposure_report = collect_exposure_data(current_session)
     """
     regions = get_all_aws_regions(session)
+    cloudfront_records = []
+    try:
+        client = session.client("cloudfront", region_name="us-east-1")
+        for page in client.get_paginator("list_distributions").paginate():
+            for item in page.get("DistributionList", {}).get("Items", []):
+                origins = []
+                for origin in item.get("Origins", {}).get("Items", []):
+                    s3 = origin.get("S3OriginConfig")
+                    origins.append({"Id": origin.get("Id"), "DomainName": origin.get("DomainName"),
+                                    "OriginType": "S3" if s3 is not None else "custom",
+                                    "OriginProtocolPolicy": origin.get("CustomOriginConfig", {}).get("OriginProtocolPolicy"),
+                                    "OriginAccessControlPresent": bool(origin.get("OriginAccessControlId")),
+                                    "OriginAccessIdentityPresent": bool(s3 and s3.get("OriginAccessIdentity"))})
+                cloudfront_records.append({"Id": item.get("Id"), "DomainName": item.get("DomainName"),
+                    "Aliases": item.get("Aliases", {}).get("Items", []), "Enabled": item.get("Enabled"), "Origins": origins,
+                    "DefaultCacheBehaviorViewerProtocolPolicy": item.get("DefaultCacheBehavior", {}).get("ViewerProtocolPolicy"),
+                    "CacheBehaviors": [{"PathPattern": behavior.get("PathPattern"), "ViewerProtocolPolicy": behavior.get("ViewerProtocolPolicy")} for behavior in item.get("CacheBehaviors", {}).get("Items", [])],
+                    "ViewerCertificateMinimumProtocolVersion": item.get("ViewerCertificate", {}).get("MinimumProtocolVersion"), "WebACLId": item.get("WebACLId", ""),
+                    "Enrichment": {"cloudFront": {"status": "complete"}}})
+        cloudfront_status = {"status": "complete"}
+    except AWS_ERRORS as exc:
+        cloudfront_status = {"status": "failed", "reason": classify_error(exc)["category"]}
+    api_domain_records = defaultdict(list)
+    api_domain_status = {}
+    for region in regions:
+        region_status = {}
+        try:
+            v1 = session.client("apigateway", region_name=region)
+            for page in v1.get_paginator("get_domain_names").paginate():
+                for domain in page.get("items", []):
+                    mappings = v1.get_base_path_mappings(domainName=domain["domainName"]).get("items", [])
+                    api_domain_records[region].append({"DomainName": domain.get("domainName"), "Certificate": domain.get("certificateArn") or domain.get("regionalCertificateArn"),
+                        "SecurityPolicy": domain.get("securityPolicy"), "EndpointType": ", ".join(domain.get("endpointConfiguration", {}).get("types", [])),
+                        "Mappings": [{"BasePath": m.get("basePath"), "RestApiId": m.get("restApiId"), "Stage": m.get("stage")} for m in mappings], "Enrichment": {"apiDomains": {"status": "complete"}}})
+            region_status["v1"] = {"status": "complete"}
+        except AWS_ERRORS as exc:
+            region_status["v1"] = {"status": "failed", "reason": classify_error(exc)["category"]}
+        try:
+            v2 = session.client("apigatewayv2", region_name=region)
+            for page in v2.get_paginator("get_domain_names").paginate():
+                for domain in page.get("Items", []):
+                    mappings = v2.get_api_mappings(DomainName=domain["DomainName"]).get("Items", [])
+                    configuration = (domain.get("DomainNameConfigurations") or [{}])[0]
+                    api_domain_records[region].append({"DomainName": domain.get("DomainName"), "Certificate": configuration.get("CertificateArn"),
+                        "SecurityPolicy": configuration.get("SecurityPolicy", domain.get("SecurityPolicy")), "EndpointType": configuration.get("EndpointType"),
+                        "Mappings": [{"ApiId": m.get("ApiId"), "Stage": m.get("Stage"), "ApiMappingKey": m.get("ApiMappingKey", "")} for m in mappings], "Enrichment": {"apiDomains": {"status": "complete"}}})
+            region_status["v2"] = {"status": "complete"}
+        except AWS_ERRORS as exc:
+            region_status["v2"] = {"status": "failed", "reason": classify_error(exc)["category"]}
+        api_domain_status[region] = region_status
     result_summary = defaultdict(dict)
     result_details = defaultdict(lambda: defaultdict(list))
     lock = threading.Lock()
@@ -460,10 +511,18 @@ def collect_exposure_data(session):
     for t in threads:
         t.join()
 
+    details = dict(result_details)
+    if cloudfront_records:
+        details["CloudFront Distributions"] = {"Global": cloudfront_records}
+    if api_domain_records:
+        details["API Custom Domains"] = dict(api_domain_records)
+    api_domain_failed = any(result["status"] == "failed" for region_result in api_domain_status.values() for result in region_result.values())
     return {
         "summary": dict(result_summary),
-        "details": dict(result_details),
-        "network_ports": network_ports_results
+        "details": details,
+        "network_ports": network_ports_results,
+        "Enrichment": {"cloudFront": cloudfront_status,
+                       "apiDomains": {"status": "failed" if api_domain_failed else "complete", "regions": api_domain_status}}
     }
 
 def scan_lambda_credentials(session):
