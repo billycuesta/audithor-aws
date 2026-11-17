@@ -1,7 +1,7 @@
 """Inspector inventory: service activation, findings and enrichment are distinct."""
 from collections import defaultdict
 from botocore.exceptions import ClientError
-from .diagnostics import Collection, AWS_CONFIG
+from .diagnostics import Collection, AWS_CONFIG, AWS_ERRORS
 
 # Conservative batch size for instance detail requests.
 INSTANCE_DETAIL_BATCH_SIZE = 100
@@ -37,11 +37,34 @@ def collect_inspector_status(session):
             if account is None:
                 continue
             resource_state = account.get("resourceState", {})
-            statuses.append({"Region": region,
-                             "InspectorStatus": account.get("state", {}).get("status", "UNKNOWN"),
-                             "ScanEC2": resource_state.get("ec2", {}).get("status", "UNKNOWN"),
-                             "ScanECR": resource_state.get("ecr", {}).get("status", "UNKNOWN"),
-                             "ScanLambda": resource_state.get("lambda", {}).get("status", "NOT_AVAILABLE")})
+            status = {"Region": region,
+                      "InspectorStatus": account.get("state", {}).get("status", "UNKNOWN"),
+                      "ScanEC2": resource_state.get("ec2", {}).get("status", "UNKNOWN"),
+                      "ScanECR": resource_state.get("ecr", {}).get("status", "UNKNOWN"),
+                      "ScanLambda": resource_state.get("lambda", {}).get("status", "NOT_AVAILABLE"),
+                      "Coverage": []}
+            if status["InspectorStatus"] == "DISABLED":
+                diagnostics.record("inspector2", region, "list_coverage", "skipped", category="service_disabled", impact="enrichment")
+                status["Enrichment"] = {"coverage": {"status": "skipped", "reason": "service_disabled"}}
+            else:
+                try:
+                    for page in client.get_paginator("list_coverage").paginate(filterCriteria={}):
+                        for item in page.get("coveredResources", []):
+                            scan_status = item.get("scanStatus", {})
+                            coverage = {"resourceType": item.get("resourceType"),
+                                        "resourceId": item.get("resourceId"),
+                                        "scanType": item.get("scanType"),
+                                        "scanStatus": scan_status.get("statusCode"),
+                                        "reason": scan_status.get("reason")}
+                            if "lastScannedAt" in item:
+                                coverage["lastScannedAt"] = item["lastScannedAt"].isoformat() if hasattr(item["lastScannedAt"], "isoformat") else item["lastScannedAt"]
+                            status["Coverage"].append(coverage)
+                    diagnostics.record("inspector2", region, "list_coverage", "complete", impact="enrichment")
+                    status["Enrichment"] = {"coverage": {"status": "complete"}}
+                except AWS_ERRORS as exc:
+                    failure = diagnostics.failure(exc, "inspector2", region, "list_coverage", impact="enrichment")
+                    status["Enrichment"] = {"coverage": {"status": "failed", "reason": failure["category"]}}
+            statuses.append(status)
     return diagnostics.finish({"scan_status": statuses, "findings": [], "findingsStatus": "not_run"})
 
 
