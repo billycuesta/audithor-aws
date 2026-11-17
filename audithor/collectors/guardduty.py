@@ -3,6 +3,8 @@ import json
 import boto3
 from botocore.exceptions import ClientError
 from .utils import get_all_aws_regions # Importación relativa
+from .diagnostics import classify_error
+from datetime import datetime, timezone
 
 from typing import Dict, Any, List
 import boto3  # Assuming boto3 is used, added for typing
@@ -47,7 +49,8 @@ def collect_guardduty_data(session: boto3.Session) -> Dict[str, List[Dict[str, A
                 status_by_region.append({
                     "Region": region, "Status": "Not Enabled", "S3 Logs": "-",
                     "Kubernetes Logs": "-", "EC2 Malware Protection": "-",
-                    "EKS Malware Protection": "-"
+                    "EKS Malware Protection": "-", "Features": [],
+                    "Enrichment": {"features": {"status": "skipped"}}
                 })
                 continue
 
@@ -65,6 +68,8 @@ def collect_guardduty_data(session: boto3.Session) -> Dict[str, List[Dict[str, A
                 "Kubernetes Logs": features.get("KUBERNETES_AUDIT_LOGS", "N/A"),
                 "EC2 Malware Protection": features.get("MALWARE_PROTECTION", "N/A"),
                 "EKS Malware Protection": features.get("EKS_RUNTIME_MONITORING", "N/A"),
+                "Features": detector_details.get("Features", []),
+                "Enrichment": {"features": {"status": "complete"}},
             })
 
             # If the detector is active, collect its findings.
@@ -89,11 +94,13 @@ def collect_guardduty_data(session: boto3.Session) -> Dict[str, List[Dict[str, A
             status_by_region.append({
                 "Region": region, "Status": f"Error ({type(e).__name__})", "S3 Logs": "-",
                 "Kubernetes Logs": "-", "EC2 Malware Protection": "-",
-                "EKS Malware Protection": "-"
+                "EKS Malware Protection": "-", "Features": [],
+                "Enrichment": {"features": {"status": "failed", "reason": classify_error(e)["category"]}}
             })
 
     # Process the raw findings to simplify their structure.
     processed_findings = []
+    collected_at = datetime.now(timezone.utc).isoformat()
     for f in all_findings_raw:
         severity_map = {
             1: "LOW", 2: "LOW", 3: "LOW", 4: "MEDIUM", 5: "MEDIUM",
@@ -119,13 +126,23 @@ def collect_guardduty_data(session: boto3.Session) -> Dict[str, List[Dict[str, A
             if details:
                 resource_details_str = f"Bucket: {details[0].get('Name', 'N/A')}"
 
+        created_at = f.get("CreatedAt")
+        updated_at = f.get("UpdatedAt")
+        service = f.get("Service", {})
         processed_findings.append({
+            "Id": f.get("Id", "N/A"),
+            "Source": "GuardDuty API",
+            "Archived": service.get("Archived", False),
+            "CreatedAt": created_at.isoformat() if hasattr(created_at, "isoformat") else created_at or "N/A",
+            "UpdatedAt": updated_at.isoformat() if hasattr(updated_at, "isoformat") else updated_at or "N/A",
+            "Count": service.get("Count", 0),
+            "CollectedAt": collected_at,
             "SeverityScore": severity_score,
             "SeverityLabel": severity_map.get(severity_score, "INFORMATIONAL"),
             "Region": f.get("Region", "N/A"),
             "Type": f.get("Type", "N/A"),
             "Resource": f"{resource_type} - {resource_details_str}",
-            "LastSeen": f.get("UpdatedAt", "N/A").split("T")[0],
+            "LastSeen": (updated_at.isoformat() if hasattr(updated_at, "isoformat") else str(updated_at or "N/A")).split("T")[0],
             "Title": f.get("Title", "N/A")
         })
 

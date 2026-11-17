@@ -97,10 +97,10 @@ const renderServiceDescription = (serviceInfo) => html`
 
 // --- FUNCIONES INTERNAS DEL MÓDULO (NO SE EXPORTAN) ---
 
-const renderGuarddutyStatusTable = (statusList) => {
-    const activeRegions = statusList.filter(s => s.Status.toLowerCase() === 'enabled');
+const renderGuarddutyStatusTable = (statusList = []) => {
+    const activeRegions = statusList.filter(s => (s.Status || '').toLowerCase() === 'enabled');
 
-    if (!activeRegions || activeRegions.length === 0) {
+    if (activeRegions.length === 0) {
         return html`<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">GuardDuty is not enabled in any of the analyzed regions.</p></div>`;
     }
 
@@ -111,13 +111,18 @@ const renderGuarddutyStatusTable = (statusList) => {
         <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(s['Kubernetes Logs'])}</td>
         <td class="px-4 py-4 whitespace-nowrap text-sm">${createStatusBadge(s['Malware Protection'])}</td>
     </tr>`);
+    const featureLists = activeRegions.map(s => {
+        const collected = s.Enrichment?.features?.status === 'complete';
+        const features = collected ? (s.Features ?? []).map(feature => html`<li class="py-1"><span class="font-medium">${feature.Name}</span>: ${feature.Status}${(feature.AdditionalConfiguration ?? []).map(additional => html`<span class="ml-2 text-gray-600">${additional.Name}: ${additional.Status}</span>`)}</li>`) : html`<li class="text-gray-500">Not collected</li>`;
+        return html`<section class="mt-4 rounded-lg border border-gray-200 p-4"><h4 class="font-semibold text-gray-800">${s.Region} GuardDuty Features</h4><ul class="mt-2 text-sm text-gray-700">${Array.isArray(features) ? join(features) : features}</ul></section>`;
+    });
     return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">S3 Logs</th>
         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kubernetes Logs</th>
         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Malware Protection</th>
-    </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`;
+    </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table>${join(featureLists)}</div>`;
 };
 
 const renderGuarddutyFindingsTable = (findings) => {
@@ -140,6 +145,8 @@ const renderGuarddutyFindingsTable = (findings) => {
             <td class="px-4 py-4 text-sm text-gray-800 break-words">${f.Title}</td>
             <td class="px-4 py-4 text-sm text-gray-600 break-words">${f.Resource}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${f.LastSeen}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${f.Source || 'Not collected'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${f.CollectedAt || 'Not collected'}</td>
         </tr>`;
     });
     return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
@@ -148,6 +155,8 @@ const renderGuarddutyFindingsTable = (findings) => {
         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Resource</th>
         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Seen</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Collected At</th>
     </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`;
 };
 
