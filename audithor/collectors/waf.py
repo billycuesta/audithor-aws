@@ -111,6 +111,27 @@ def get_logging_configuration_details(client, acl_arn, scope):
     return logging_details
 
 
+def _extract_web_acl_details(web_acl):
+    """Return JSON-safe audit details from the get_web_acl WebACL shape."""
+    default_action = web_acl.get("DefaultAction")
+    rules = []
+    for rule in web_acl.get("Rules", []):
+        statement = rule.get("Statement", {})
+        summary = "Not collected"
+        if statement:
+            statement_type, config = next(iter(statement.items()))
+            if statement_type == "ManagedRuleGroupStatement":
+                summary = f"ManagedRuleGroupStatement {config.get('VendorName', '')}/{config.get('Name', '')}".strip()
+            elif statement_type == "RateBasedStatement":
+                summary = f"RateBasedStatement limit {config.get('Limit', 'unknown')}"
+            elif statement_type == "IPSetReferenceStatement":
+                summary = f"IPSetReferenceStatement {config.get('ARN', '')}".strip()
+            else:
+                summary = statement_type
+        rules.append({key: rule[key] for key in ("Name", "Priority", "Action", "OverrideAction") if key in rule} | {"StatementSummary": summary})
+    return {"DefaultAction": default_action, "Capacity": web_acl.get("Capacity"), "Rules": rules}
+
+
 def collect_waf_data(session):
     """
     Collects data on AWS WAFv2 Web ACLs and IP Sets, including CloudWatch metrics for top rules
@@ -205,6 +226,8 @@ def collect_waf_data(session):
                 "LoggingConfiguration": acl_details.get("LoggingConfiguration", {}),
                 "LoggingDetails": logging_details,
                 "VisibilityConfig": acl_details.get("VisibilityConfig", {}),
+                **_extract_web_acl_details(acl_details),
+                "Enrichment": {"rules": {"status": "complete"}},
                 "TopRules": sorted(top_rules, key=lambda x: x['BlockedRequests'], reverse=True)
             })
     except ClientError:
@@ -286,6 +309,8 @@ def collect_waf_data(session):
                     "LoggingConfiguration": acl_details.get("LoggingConfiguration", {}),
                     "LoggingDetails": logging_details,
                     "VisibilityConfig": acl_details.get("VisibilityConfig", {}),
+                    **_extract_web_acl_details(acl_details),
+                    "Enrichment": {"rules": {"status": "complete"}},
                     "TopRules": sorted(top_rules, key=lambda x: x['BlockedRequests'], reverse=True)
                 })
         except ClientError:
