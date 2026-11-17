@@ -3,6 +3,7 @@ import json
 import boto3
 from botocore.exceptions import ClientError
 from .utils import get_all_aws_regions # Importación relativa
+from .diagnostics import classify_error
 
 def collect_kms_data(session):
     """
@@ -52,8 +53,26 @@ def collect_kms_data(session):
             for page in keys_paginator.paginate():
                 for key in page.get("Keys", []):
                     key_id = key['KeyId']
-                    desc = kms_client.describe_key(KeyId=key_id)['KeyMetadata']
-                    
+                    try:
+                        desc = kms_client.describe_key(KeyId=key_id)['KeyMetadata']
+                    except ClientError as exc:
+                        result_kms_keys.append({
+                            "Region": region,
+                            "KeyId": key_id,
+                            "ARN": key.get('KeyArn'),
+                            "Aliases": ", ".join(alias_map.get(key_id, ["(No Alias)"])),
+                            "Status": None,
+                            "Origin": None,
+                            "KeyManager": None,
+                            "KeySpec": None,
+                            "KeyUsage": None,
+                            "EncryptionAlgorithms": None,
+                            "Enrichment": {"keyMetadata": {"status": "failed", "reason": classify_error(exc)["category"]}},
+                            "RotationEnabled": "N/A",
+                            "Policy": "Could not retrieve",
+                        })
+                        continue
+
                     # --- Check rotation status for applicable keys ---
                     rotation_enabled = "N/A" # Default for AWS managed or asymmetric keys
                     is_customer_symmetric = (desc.get('KeyManager') == 'CUSTOMER' and 
@@ -83,6 +102,10 @@ def collect_kms_data(session):
                         "Status": desc.get('KeyState'),
                         "Origin": desc.get('Origin'),
                         "KeyManager": desc.get('KeyManager'),
+                        "KeySpec": desc.get('KeySpec'),
+                        "KeyUsage": desc.get('KeyUsage'),
+                        "EncryptionAlgorithms": desc.get('EncryptionAlgorithms'),
+                        "Enrichment": {"keyMetadata": {"status": "complete"}},
                         "RotationEnabled": rotation_enabled,
                         "Policy": policy_doc,
                     })
