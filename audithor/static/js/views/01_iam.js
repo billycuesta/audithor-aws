@@ -1007,9 +1007,14 @@ const renderIamPrincipalDetails = (principal, type, searchedTerm) => {
     }
     
     const formattedJson = JSON.stringify(detailsToShow, null, 2);
+    const policyDocuments = type === 'Role'
+        ? principal.Enrichment?.policyDocuments?.status === 'complete'
+            ? html`<div class="mt-6"><h4 class="font-semibold text-md mb-3 text-[#204071]">Role Policy Documents</h4><div class="space-y-4">${join((principal.InlinePolicyDocuments || []).map(policy => html`<section><h5 class="font-semibold text-sm mb-2">Inline policy: ${policy.PolicyName}</h5><pre class="bg-[#204071] text-white p-4 rounded-lg text-xs font-mono overflow-x-auto">${JSON.stringify(policy.PolicyDocument, null, 2)}</pre></section>`))}${join((principal.CustomerManagedPolicies || []).map(policy => html`<section><h5 class="font-semibold text-sm mb-2">Customer-managed policy: ${policy.PolicyName} (${policy.DefaultVersionId})</h5><pre class="bg-[#204071] text-white p-4 rounded-lg text-xs font-mono overflow-x-auto">${JSON.stringify(policy.PolicyDocument, null, 2)}</pre></section>`))}</div></div>`
+            : html`<p class="mt-6 text-sm text-gray-500">Policy documents: Not collected</p>`
+        : '';
     log(`Showing details for ${type}: ${name}`, 'success');
 
-    setHtml(resultsContainer, html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><h3 class="text-xl font-bold text-[#204071] mb-4">Details for ${type}: ${name}</h3><pre id="iam-principal-json" class="bg-[#204071] text-white p-4 rounded-lg text-xs font-mono overflow-x-auto"></pre></div>`);
+    setHtml(resultsContainer, html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><h3 class="text-xl font-bold text-[#204071] mb-4">Details for ${type}: ${name}</h3><pre id="iam-principal-json" class="bg-[#204071] text-white p-4 rounded-lg text-xs font-mono overflow-x-auto"></pre>${policyDocuments}</div>`);
     resultsContainer.querySelector('#iam-principal-json').textContent = formattedJson;
 };
 
