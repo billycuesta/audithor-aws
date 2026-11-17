@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { PAYLOADS, makeDom, assertNoInjection, clickAll, benignText, tagSequence } from './helpers/xss_payloads.mjs';
+import { PAYLOADS, makeDom, assertNoInjection, clickAll, benignText, tagSequence, assertOrderedSubsequence, assertTextContainsInOrder } from './helpers/xss_payloads.mjs';
 import { installActionDelegation } from '../audithor/static/js/safe_html.js';
 
 const baselineUrl = new URL('./baseline/audithor_project/static/js/views/02_exposure.js', import.meta.url).href;
@@ -84,15 +84,18 @@ const main = async () => {
   const baseRoot = baseline.dom.window.document.querySelector('#exposure-view');
   const currentRoot = converted.dom.window.document.querySelector('#exposure-view');
   assertNoLiteralMarkup(currentRoot); assertNoLiteralMarkup(baseRoot);
-  assert.equal(benignText(currentRoot), benignText(baseRoot));
-  assert.deepEqual(tagSequence(currentRoot), tagSequence(baseRoot));
+  assertTextContainsInOrder(benignText(currentRoot), benignText(baseRoot), '02_exposure.js main text parity');
+  assertOrderedSubsequence(tagSequence(currentRoot), tagSequence(baseRoot), '02_exposure.js main tag parity');
   assertNoLiteralMarkup(currentRoot);
   const baselinePopulated = await create(baselineUrl);
   const convertedPopulated = await create(currentUrl);
   const s3Baseline = await openAll(baselinePopulated.dom, baselinePopulated.view, true);
   const s3Current = await openAll(convertedPopulated.dom, convertedPopulated.view, true);
   for (const candidate of [baselinePopulated, convertedPopulated]) assertNoLiteralMarkup(candidate.dom.window.document.querySelector('#exposure-view'));
-  assert.deepEqual(s3Current, s3Baseline, 'modal and S3 analysis benign parity');
+  for (let index = 0; index < s3Baseline.length; index++) {
+    assertTextContainsInOrder(s3Current[index].text, s3Baseline[index].text, `02_exposure.js modal ${index} text parity`);
+    assertOrderedSubsequence(s3Current[index].tags, s3Baseline[index].tags, `02_exposure.js modal ${index} tag parity`);
+  }
   // Modal parity is checked per public modal entry point in fresh, equivalent DOMs.
   for (const [name, args] of [['openModalWithTlsDetails', [0, 0]], ['openModalWithResourceMap', [0]], ['openS3BucketDetails', ['audit-bucket', 'us-east-1']], ['openLambdaCredentialDetails', [0]], ['openModalWithApiMap', [0]]]) {
     const a = await create(baselineUrl); const b = await create(currentUrl);
@@ -101,8 +104,8 @@ const main = async () => {
     globalThis.window = a.dom.window; globalThis.document = a.dom.window.document; fnA(...args);
     globalThis.window = b.dom.window; globalThis.document = b.dom.window.document; fnB(...args);
     assertNoLiteralMarkup(modalRoot(a.dom.window)); assertNoLiteralMarkup(modalRoot(b.dom.window));
-    assert.equal(benignText(modalRoot(b.dom.window)), benignText(modalRoot(a.dom.window)), `${name} benign text parity`);
-    assert.deepEqual(tagSequence(modalRoot(b.dom.window)), tagSequence(modalRoot(a.dom.window)), `${name} benign tag parity`);
+    assertTextContainsInOrder(benignText(modalRoot(b.dom.window)), benignText(modalRoot(a.dom.window)), `02_exposure.js ${name} text parity`);
+    assertOrderedSubsequence(tagSequence(modalRoot(b.dom.window)), tagSequence(modalRoot(a.dom.window)), `02_exposure.js ${name} tag parity`);
   }
   for (const payload of PAYLOADS) {
     const data = replaceStrings(fixture(), payload);

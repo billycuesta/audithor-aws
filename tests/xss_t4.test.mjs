@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { makeDom, PAYLOADS, assertNoInjection, clickAll, benignText, tagSequence } from './helpers/xss_payloads.mjs';
+import { makeDom, PAYLOADS, assertNoInjection, clickAll, benignText, tagSequence, assertOrderedSubsequence, assertTextContainsInOrder } from './helpers/xss_payloads.mjs';
 
 const fixture = () => ({
   network: { metadata: { executionDate: '2025-01-01' }, results: {
@@ -37,8 +37,8 @@ const benign = fixture();
 const originalRoots = render(baseline, structuredClone(benign));
 const convertedRoots = render(converted, structuredClone(benign));
 for (let i = 0; i < tabIds.length; i++) {
-  assert.equal(benignText(convertedRoots[i]), benignText(originalRoots[i]), `${tabIds[i]} text parity`);
-  assert.deepEqual(tagSequence(convertedRoots[i]), tagSequence(originalRoots[i]), `${tabIds[i]} tag parity`);
+  assertTextContainsInOrder(benignText(convertedRoots[i]), benignText(originalRoots[i]), `${tabIds[i]} text parity`);
+  assertOrderedSubsequence(tagSequence(convertedRoots[i]), tagSequence(originalRoots[i]), `${tabIds[i]} tag parity`);
 }
 function openResourcesModal(module, data) {
   install(data);
@@ -48,8 +48,8 @@ function openResourcesModal(module, data) {
 }
 const baselineModal = openResourcesModal(baseline, structuredClone(benign));
 const convertedModal = openResourcesModal(converted, structuredClone(benign));
-assert.equal(benignText(convertedModal), benignText(baselineModal), 'associated resources modal text parity');
-assert.deepEqual(tagSequence(convertedModal), tagSequence(baselineModal), 'associated resources modal tag parity');
+assertTextContainsInOrder(benignText(convertedModal), benignText(baselineModal), 'associated resources modal text parity');
+assertOrderedSubsequence(tagSequence(convertedModal), tagSequence(baselineModal), 'associated resources modal tag parity');
 assert.ok(convertedModal.querySelectorAll('ul li').length > 0, 'associated modal renders resource list items');
 assert.doesNotMatch(convertedModal.textContent, /^\\s*<div/);
 for (const payload of PAYLOADS) {

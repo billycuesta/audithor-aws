@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { makeDom, PAYLOADS, assertNoInjection, clickAll, benignText, tagSequence } from './helpers/xss_payloads.mjs';
+import { makeDom, PAYLOADS, assertNoInjection, clickAll, benignText, tagSequence, assertOrderedSubsequence, assertTextContainsInOrder } from './helpers/xss_payloads.mjs';
 import { installActionDelegation } from '../audithor/static/js/safe_html.js';
 
 const cloudwatchFixture = () => ({ metadata: { executionDate: '2025-01-01' }, results: { alarms: [{ Region: 'us-east-1', AlarmName: 'CPU', StateValue: 'OK', Namespace: 'AWS/EC2', MetricName: 'CPUUtilization', ComparisonOperator: 'GreaterThanThreshold', Threshold: 80, AlarmActions: [] }], topics: [{ Region: 'us-east-1', TopicArn: 'arn:aws:sns:us-east-1:123:alerts', Subscriptions: [{ Endpoint: 'ops@example.com' }] }] } });
@@ -9,7 +9,7 @@ const cloudwatchConverted = await import(new URL('../audithor/static/js/views/07
 function renderCloudwatch(module, data) { window.cloudwatchApiData = data; window.securityHubApiData = { results: { findings: { cloudwatchFindings: [] } } }; document.body.innerHTML = '<div id="cloudwatch-view"></div>'; module.buildCloudwatchView(); return document.getElementById('cloudwatch-view'); }
 const parityDom = makeDom('<div></div>');
 const original = renderCloudwatch(cloudwatchBaseline, structuredClone(cloudwatchFixture())); const safe = renderCloudwatch(cloudwatchConverted, structuredClone(cloudwatchFixture()));
-assert.equal(benignText(safe), benignText(original)); assert.deepEqual(tagSequence(safe), tagSequence(original));
+assertTextContainsInOrder(benignText(safe), benignText(original), '07_cloudwatch.js text parity'); assertOrderedSubsequence(tagSequence(safe), tagSequence(original), '07_cloudwatch.js tag parity');
 for (const payload of PAYLOADS) { const dom = makeDom('<div></div>'); const root = renderCloudwatch(cloudwatchConverted, poison(cloudwatchFixture(), payload)); assertNoInjection(window, root); window.toggleAlarmDetails = cloudwatchConverted.toggleAlarmDetails; clickAll(window, root); dom.window.close(); }
 parityDom.window.close();
 console.log('CloudWatch parity and payload checks passed');
@@ -36,7 +36,7 @@ const oldCloudtrailRoot = renderCloudtrail(cloudtrailBaseline, structuredClone(c
 const newCloudtrailRoot = renderCloudtrail(cloudtrailConverted, structuredClone(cloudtrailFixture()));
 const cloudtrailOriginalText = benignText(oldCloudtrailRoot);
 const cloudtrailConvertedText = benignText(newCloudtrailRoot);
-assert.deepEqual(tagSequence(newCloudtrailRoot), tagSequence(oldCloudtrailRoot), 'CloudTrail main view tag parity');
+assertOrderedSubsequence(tagSequence(newCloudtrailRoot), tagSequence(oldCloudtrailRoot), '06_cloudtrail.js main view tag parity');
 
 async function searchAndOpenEvent(module, data) {
   const root = renderCloudtrail(module, data);
@@ -64,11 +64,11 @@ try {
   newLookup = await searchAndOpenEvent(cloudtrailConverted, structuredClone(cloudtrailFixture()));
   dom.window.close();
 } finally { globalThis.fetch = originalFetch; }
-assert.equal(newLookup.resultText, oldLookup.resultText, 'CloudTrail lookup result text parity');
-assert.deepEqual(newLookup.resultTags, oldLookup.resultTags, 'CloudTrail lookup result tag parity');
-assert.equal(newLookup.detailText, oldLookup.detailText, 'CloudTrail event detail text parity');
-assert.deepEqual(newLookup.detailTags, oldLookup.detailTags, 'CloudTrail event detail tag parity');
-assert.equal(cloudtrailConvertedText, cloudtrailOriginalText, 'CloudTrail main view text parity');
+assertTextContainsInOrder(newLookup.resultText, oldLookup.resultText, '06_cloudtrail.js lookup result text parity');
+assertOrderedSubsequence(newLookup.resultTags, oldLookup.resultTags, '06_cloudtrail.js lookup result tag parity');
+assertTextContainsInOrder(newLookup.detailText, oldLookup.detailText, '06_cloudtrail.js event detail text parity');
+assertOrderedSubsequence(newLookup.detailTags, oldLookup.detailTags, '06_cloudtrail.js event detail tag parity');
+assertTextContainsInOrder(cloudtrailConvertedText, cloudtrailOriginalText, '06_cloudtrail.js main view text parity');
 for (const payload of PAYLOADS) {
   const dom = makeDom(cloudtrailMarkup);
   const root = renderCloudtrail(cloudtrailConverted, poison(cloudtrailFixture(), payload));

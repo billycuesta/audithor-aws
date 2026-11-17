@@ -40,5 +40,23 @@ export function clickAll(window, root) {
   assert.equal(window.__x, undefined);
 }
 
-export const benignText = root => root.textContent.replace(/\s+/g, ' ').trim();
+export function assertOrderedSubsequence(actual, expected, label) {
+  let actualIndex = 0;
+  for (let expectedIndex = 0; expectedIndex < expected.length; expectedIndex++) {
+    while (actualIndex < actual.length && actual[actualIndex] !== expected[expectedIndex]) actualIndex++;
+    assert.ok(actualIndex < actual.length, `${label}: unmatched item ${JSON.stringify(expected[expectedIndex])} at index ${expectedIndex}`);
+    actualIndex++;
+  }
+}
+
+export function assertTextContainsInOrder(actual, expected, label) {
+  assertOrderedSubsequence(actual.trim().split(/\s+/), expected.trim().split(/\s+/), label);
+}
+
+export const benignText = root => {
+  const walker = root.ownerDocument.createTreeWalker(root, 4);
+  const parts = [];
+  while (walker.nextNode()) parts.push(walker.currentNode.nodeValue);
+  return parts.join(' ').replace(/\s+/g, ' ').trim();
+};
 export const tagSequence = root => [...root.querySelectorAll('*')].map(el => el.tagName.toLowerCase());

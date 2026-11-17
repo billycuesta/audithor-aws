@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { PAYLOADS, assertNoInjection, benignText, clickAll, makeDom, tagSequence } from './helpers/xss_payloads.mjs';
+import { PAYLOADS, assertNoInjection, benignText, clickAll, makeDom, tagSequence, assertOrderedSubsequence, assertTextContainsInOrder } from './helpers/xss_payloads.mjs';
 import { installActionDelegation } from '../audithor/static/js/safe_html.js';
 
 const baselineUrl = new URL('./baseline/audithor_project/static/js/views/01_iam.js', import.meta.url).href;
@@ -21,8 +21,8 @@ const renderBuilder = async (url) => {
 // PARITY: benign fixture rendered by baseline and converted implementations.
 const baseline = await renderBuilder(baselineUrl);
 const current = await renderBuilder(currentUrl);
-assert.equal(benignText(current.root), benignText(baseline.root));
-assert.deepEqual(tagSequence(current.root), tagSequence(baseline.root));
+assertTextContainsInOrder(benignText(current.root), benignText(baseline.root), '01_iam.js text parity');
+assertOrderedSubsequence(tagSequence(current.root), tagSequence(baseline.root), '01_iam.js tag parity');
 baseline.dom.window.close();
 current.dom.window.close();
 

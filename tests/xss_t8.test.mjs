@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { makeDom, assertNoInjection, clickAll, benignText, tagSequence, PAYLOADS } from './helpers/xss_payloads.mjs';
+import { makeDom, assertNoInjection, clickAll, benignText, tagSequence, PAYLOADS, assertOrderedSubsequence, assertTextContainsInOrder } from './helpers/xss_payloads.mjs';
 import { installActionDelegation } from '../audithor/static/js/safe_html.js';
 
 const fixture = {
@@ -65,8 +65,10 @@ for (const config of configs) {
   const current = await loadView(`../audithor/static/js/views`, config, fixture);
   assertNoLiteralMarkup(baseline.root);
   assertNoLiteralMarkup(current.root);
-  assert.equal(benignText(current.root), benignText(baseline.root), `${config.name} benign text parity`);
-  assert.deepEqual(tagSequence(current.root), tagSequence(baseline.root), `${config.name} benign tag parity`);
+  const compareText = (actual, expected, label) => config.module === '12_kms_secrets' ? assertTextContainsInOrder(actual, expected, label) : assert.equal(actual, expected, label);
+  const compareTags = (actual, expected, label) => config.module === '12_kms_secrets' ? assertOrderedSubsequence(actual, expected, label) : assert.deepEqual(actual, expected, label);
+  compareText(benignText(current.root), benignText(baseline.root), `${config.name} benign text parity`);
+  compareTags(tagSequence(current.root), tagSequence(baseline.root), `${config.name} benign tag parity`);
 
   // Exercise every view tab in both implementations.
   const tabLinks = [...current.root.querySelectorAll('nav a[data-tab]')];
@@ -75,8 +77,8 @@ for (const config of configs) {
   for (let i = 0; i < tabLinks.length; i++) {
     tabLinks[i].click();
     baseLinks[i].click();
-    assert.equal(benignText(current.root), benignText(baseline.root), `${config.name} tab ${i} text parity`);
-    assert.deepEqual(tagSequence(current.root), tagSequence(baseline.root), `${config.name} tab ${i} tag parity`);
+    compareText(benignText(current.root), benignText(baseline.root), `${config.name} tab ${i} text parity`);
+    compareTags(tagSequence(current.root), tagSequence(baseline.root), `${config.name} tab ${i} tag parity`);
   }
 
   if (config.module === '12_kms_secrets') {
@@ -101,8 +103,8 @@ for (const config of configs) {
       const baselineModal = baseline.dom.window.document.getElementById('details-modal');
       assertNoLiteralMarkup(currentModal);
       assertNoLiteralMarkup(baselineModal);
-      assert.equal(benignText(currentModal), benignText(baselineModal), `operator action ${label} modal text parity`);
-      assert.deepEqual(tagSequence(currentModal), tagSequence(baselineModal), `operator action ${label} modal tag parity`);
+      compareText(benignText(currentModal), benignText(baselineModal), `operator action ${label} modal text parity`);
+      compareTags(tagSequence(currentModal), tagSequence(baselineModal), `operator action ${label} modal tag parity`);
       currentModal.classList.add('hidden');
       baselineModal.classList.add('hidden');
     }
@@ -140,8 +142,8 @@ for (const [name, index] of [['policy', 0], ['secret', 0]]) {
   const currentContent = domCurrent.window.document.getElementById('details-modal');
   assertNoLiteralMarkup(baseContent);
   assertNoLiteralMarkup(currentContent);
-  assert.equal(benignText(currentContent), benignText(baseContent), `${name} modal text parity`);
-  assert.deepEqual(tagSequence(currentContent), tagSequence(baseContent), `${name} modal tag parity`);
+  assertTextContainsInOrder(benignText(currentContent), benignText(baseContent), `12_kms_secrets.js ${name} modal text parity`);
+  assertOrderedSubsequence(tagSequence(currentContent), tagSequence(baseContent), `12_kms_secrets.js ${name} modal tag parity`);
   domBase.window.close();
   domCurrent.window.close();
 

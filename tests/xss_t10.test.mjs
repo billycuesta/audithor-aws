@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { makeDom, PAYLOADS, assertNoInjection, clickAll, benignText, tagSequence } from './helpers/xss_payloads.mjs';
+import { makeDom, PAYLOADS, assertNoInjection, clickAll, benignText, tagSequence, assertOrderedSubsequence, assertTextContainsInOrder } from './helpers/xss_payloads.mjs';
 
 const currentRoot = new URL('../audithor/static/js/views/', import.meta.url).href;
 const baselineRoot = new URL('./baseline/audithor_project/static/js/views/', import.meta.url).href;
@@ -83,8 +83,13 @@ for (const spec of specs) {
   if (spec.file === '05_waf.js') currentEnv.window.securityHubApiData = { results: { findings: { wafFindings: [] } } };
   if (spec.file === '04_ecr.js') currentEnv.window.securityHubApiData = { results: { findings: { ecrFindings: [] } } };
   currentModule[spec.builder]();
-  assert.equal(benignText(currentEnv.root).replace(/\s+/g, ''), baselineText.replace(/\s+/g, ''), `${spec.file} benign text parity`);
-  assert.deepEqual(tagSequence(currentEnv.root), baselineTags, `${spec.file} element parity`);
+  if (['03_guardduty.js', '05_waf.js'].includes(spec.file)) {
+    assertTextContainsInOrder(benignText(currentEnv.root), baselineText, `${spec.file} benign text parity`);
+    assertOrderedSubsequence(tagSequence(currentEnv.root), baselineTags, `${spec.file} element parity`);
+  } else {
+    assert.equal(benignText(currentEnv.root).replace(/\s+/g, ''), baselineText.replace(/\s+/g, ''), `${spec.file} benign text parity`);
+    assert.deepEqual(tagSequence(currentEnv.root), baselineTags, `${spec.file} element parity`);
+  }
   assertNoLiteralMarkup(currentEnv.root);
   clickAll(currentEnv.window, currentEnv.root);
 

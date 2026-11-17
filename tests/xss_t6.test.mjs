@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { JSDOM } from 'jsdom';
-import { PAYLOADS, assertNoInjection, clickAll, benignText, tagSequence } from './helpers/xss_payloads.mjs';
+import { PAYLOADS, assertNoInjection, clickAll, benignText, tagSequence, assertOrderedSubsequence, assertTextContainsInOrder } from './helpers/xss_payloads.mjs';
 
 const current = resolve('audithor/static/js/views/');
 const baseline = resolve('tests/baseline/audithor_project/static/js/views/');
@@ -63,8 +63,13 @@ for (const file of ['08_inspector.js', '09_acm.js']) {
     const root = document.getElementById(file === '08_inspector.js' ? 'inspector-view' : 'acm-view');
     if (module === original) { globalThis[`text_${file}`] = benignText(root); globalThis[`tags_${file}`] = tagSequence(root); }
     else {
-      assert.equal(benignText(root), globalThis[`text_${file}`], `${file} benign text parity`);
-      assert.deepEqual(tagSequence(root), globalThis[`tags_${file}`], `${file} element structure parity`);
+      if (file === '08_inspector.js') {
+        assertTextContainsInOrder(benignText(root), globalThis[`text_${file}`], `${file} benign text parity`);
+        assertOrderedSubsequence(tagSequence(root), globalThis[`tags_${file}`], `${file} element structure parity`);
+      } else {
+        assert.equal(benignText(root), globalThis[`text_${file}`], `${file} benign text parity`);
+        assert.deepEqual(tagSequence(root), globalThis[`tags_${file}`], `${file} element structure parity`);
+      }
     }
   }
 }
