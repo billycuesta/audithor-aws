@@ -38,6 +38,8 @@ export const buildCloudwatchView = () => {
             <div id="cw-alarms-content" class="cloudwatch-tab-content hidden">${renderCloudwatchAlarmsTable(alarms)}</div>
             <div id="cw-topics-content" class="cloudwatch-tab-content hidden">${renderCloudwatchTopicsTable(topics)}</div>
             <div id="cw-sh-content" class="cloudwatch-tab-content hidden">${createCloudwatchSecurityHubHtml()}</div>
+            <div class="mt-6">${renderLogGroupsTable(window.cloudwatchApiData.results.logGroups, window.cloudwatchApiData.results.Enrichment?.logGroups)}</div>
+            <div class="mt-6">${renderMetricFilters(window.cloudwatchApiData.results.metricFilters, window.cloudwatchApiData.results.Enrichment?.metricFilters)}</div>
         </div>`);
 
     updateCloudwatchSummaryCards(alarms, topics, cloudwatchFindings);
@@ -128,15 +130,21 @@ export const toggleAlarmDetails = (index) => {
     }
 };
 
+const missingRegions = enrichment => Object.entries(enrichment?.regions || {}).filter(([, value]) => value.status !== 'complete').map(([region, value]) => `${region}: ${value.reason || value.status}`).join(', ');
+
+const renderLogGroupsTable = (groups, enrichment) => html`<section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><h3 class="font-bold text-lg mb-4 text-[#204071]">CloudWatch Log Groups</h3><table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Log group</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Retention</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Encryption</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stored bytes</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th></tr></thead><tbody>${join((groups || []).map(group => html`<tr><td class="px-4 py-4 text-sm text-gray-600">${group.Region || 'Not collected'}</td><td class="px-4 py-4 text-sm text-gray-600">${group.logGroupName || 'Not collected'}</td><td class="px-4 py-4 text-sm text-gray-600">${group.retentionInDays == null ? (group.Enrichment?.logGroups?.status === 'complete' ? 'Never expire' : 'Not collected') : `${group.retentionInDays} days`}</td><td class="px-4 py-4 text-sm text-gray-600">${group.kmsKeyId ? group.kmsKeyId : group.Enrichment?.logGroups?.status === 'complete' ? 'Not encrypted' : 'Not collected'}</td><td class="px-4 py-4 text-sm text-gray-600">${group.storedBytes ?? 'Not collected'}</td><td class="px-4 py-4 text-sm text-gray-600">${group.creationTime ?? 'Not collected'}</td></tr>`))}</tbody></table>${groups?.length ? '' : html`<p class="text-sm text-gray-500">Not collected</p>`}${missingRegions(enrichment) ? html`<p class="mt-3 text-sm text-red-600">Not collected: ${missingRegions(enrichment)}</p>` : ''}</section>`;
+
+const renderMetricFilters = (filters, enrichment) => html`<section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><h3 class="font-bold text-lg mb-4 text-[#204071]">Metric Filters</h3>${filters?.length ? html`<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Filter</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pattern</th></tr></thead><tbody>${join(filters.map(filter => html`<tr><td class="px-4 py-4 text-sm text-gray-600">${filter.Region || 'Not collected'}</td><td class="px-4 py-4 text-sm text-gray-600">${filter.filterName || 'Not collected'}</td><td class="px-4 py-4 text-sm text-gray-600">${filter.FilterPattern ?? filter.filterPattern ?? 'Not collected'}</td></tr>`))}</tbody></table>` : html`<p class="text-sm text-gray-500">Not collected</p>`}${missingRegions(enrichment) ? html`<p class="mt-3 text-sm text-red-600">Not collected: ${missingRegions(enrichment)}</p>` : ''}</section>`;
+
 const renderCloudwatchTopicsTable = (topics) => {
-    if (!topics || topics.length === 0) return html`<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No SNS topics with email subscriptions were found.</p></div>`;
+    if (!topics || topics.length === 0) return html`<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No SNS topics were found.</p></div>`;
     const rows = topics.sort((a, b) => a.Region.localeCompare(b.Region) || a.TopicArn.localeCompare(b.TopicArn)).map(topic => {
-        const emails = topic.Subscriptions.map(s => s.Endpoint).join(', ');
+        const emails = (topic.Subscriptions || []).map(s => `${s.Protocol || ''}: ${s.Endpoint || ''} (${s.Status === 'Pending' ? 'Pending confirmation' : s.Status || 'Not collected'})`).join(', ') || 'No subscriptions';
         return html`<tr class="hover:bg-gray-50">
                     <td class="px-4 py-4 align-top whitespace-nowrap text-sm text-gray-600">${topic.Region}</td>
                     <td class="px-4 py-4 align-top text-sm font-medium text-gray-800 break-words">${topic.TopicArn}</td>
                     <td class="px-4 py-4 align-top text-sm text-gray-600 break-words">${emails}</td>
                   </tr>`;
     });
-    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Topic ARN</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subscribed Emails</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`;
+    return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Topic ARN</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subscribed Emails / Endpoints</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`;
 };

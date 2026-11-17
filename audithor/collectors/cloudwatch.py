@@ -1,7 +1,8 @@
 # collectors/cloudwatch.py
 import json
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
+from .diagnostics import classify_error
 from .utils import get_all_aws_regions # Importación relativa
 
 def collect_cloudwatch_data(session):
@@ -34,6 +35,9 @@ def collect_cloudwatch_data(session):
     all_regions = get_all_aws_regions(session)
     result_alarms = []
     result_topics = []
+    result_log_groups = []
+    result_metric_filters = []
+    enrichment = {"logGroups": {"status": "complete", "regions": {}}, "metricFilters": {"status": "complete", "regions": {}}}
 
     for region in all_regions:
         try:
@@ -46,6 +50,24 @@ def collect_cloudwatch_data(session):
             )
             cw_client = session_regional.client("cloudwatch")
             sns_client = session_regional.client("sns")
+            logs_client = session_regional.client("logs")
+
+            try:
+                for page in logs_client.get_paginator('describe_log_groups').paginate():
+                    for group in page.get('logGroups', []):
+                        result_log_groups.append({**group, "Region": region, "Enrichment": {"logGroups": {"status": "complete"}}})
+                enrichment["logGroups"]["regions"][region] = {"status": "complete"}
+            except (ClientError, BotoCoreError) as e:
+                details = classify_error(e)
+                enrichment["logGroups"]["status"] = "failed"
+                enrichment["logGroups"]["regions"][region] = {"status": "failed", "reason": details["category"]}
+            try:
+                for page in logs_client.get_paginator('describe_metric_filters').paginate():
+                    result_metric_filters.extend({**item, "FilterPattern": item.get("filterPattern"), "Region": region} for item in page.get('metricFilters', []))
+                enrichment["metricFilters"]["regions"][region] = {"status": "complete"}
+            except (ClientError, BotoCoreError) as e:
+                enrichment["metricFilters"]["status"] = "failed"
+                enrichment["metricFilters"]["regions"][region] = {"status": "failed", "reason": classify_error(e)["category"]}
 
             # 1. Collect CloudWatch Alarms
             try:
@@ -68,27 +90,25 @@ def collect_cloudwatch_data(session):
                 for topic in all_topics_in_region:
                     topic_arn = topic['TopicArn']
                     subscriptions = []
+                    subscription_status = {"status": "complete"}
                     try:
                         paginator_subs = sns_client.get_paginator('list_subscriptions_by_topic')
                         for page in paginator_subs.paginate(TopicArn=topic_arn):
                             for sub in page.get("Subscriptions", []):
-                                is_email = sub.get("Protocol") in ["email", "email-json"]
-                                is_confirmed = sub.get("SubscriptionArn") != "PendingConfirmation"
-                                if is_email and is_confirmed:
-                                    subscriptions.append({
-                                        "Endpoint": sub.get("Endpoint"),
-                                        "Protocol": sub.get("Protocol")
-                                    })
-                    except ClientError:
-                        # Ignore errors for specific topics (e.g., permissions) and continue
-                        pass
-                    
-                    if subscriptions:
-                        result_topics.append({
-                            "TopicArn": topic_arn,
-                            "Region": region,
-                            "Subscriptions": subscriptions
-                        })
+                                subscriptions.append({
+                                    "Endpoint": sub.get("Endpoint"),
+                                    "Protocol": sub.get("Protocol"),
+                                    "Status": "Pending" if sub.get("SubscriptionArn") == "PendingConfirmation" else "Confirmed"
+                                })
+                    except (ClientError, BotoCoreError) as e:
+                        subscription_status = {"status": "failed", "reason": classify_error(e)["category"]}
+
+                    result_topics.append({
+                        "TopicArn": topic_arn,
+                        "Region": region,
+                        "Subscriptions": subscriptions,
+                        "Enrichment": {"subscriptions": subscription_status}
+                    })
             except ClientError as e:
                 if "OptInRequired" in str(e):
                     continue # Skip regions that are not enabled
@@ -98,7 +118,7 @@ def collect_cloudwatch_data(session):
             if "endpoint" in str(e) or "OptInRequired" in str(e) or "Location" in str(e):
                 continue
 
-    return {"alarms": result_alarms, "topics": result_topics}
+    return {"alarms": result_alarms, "topics": result_topics, "logGroups": result_log_groups, "metricFilters": result_metric_filters, "Enrichment": enrichment}
 
 
 def get_log_group_destinations(session, log_group_arn):
@@ -141,6 +161,7 @@ def get_log_group_destinations(session, log_group_arn):
             metric_transformation = mf.get('metricTransformations', [{}])[0]
             mf_data = {
                 "FilterName": mf.get('filterName'),
+                "FilterPattern": mf.get('filterPattern'),
                 "MetricName": metric_transformation.get('metricName'),
                 "Namespace": metric_transformation.get('metricNamespace'),
                 "Alarms": []
@@ -160,12 +181,6 @@ def get_log_group_destinations(session, log_group_arn):
                                 
                                 alarm_name = alarm.get('AlarmName')
                                 
-                                # DEBUG: Imprimir información de la alarma
-                                print(f"Found alarm: {alarm_name}")
-                                print(f"  AlarmActions: {alarm.get('AlarmActions', [])}")
-                                print(f"  OKActions: {alarm.get('OKActions', [])}")
-                                print(f"  InsufficientDataActions: {alarm.get('InsufficientDataActions', [])}")
-                                
                                 # Obtener detalles de SNS para cada alarma
                                 sns_details = get_alarm_sns_details(session, alarm_name, log_region)
                                 
@@ -179,13 +194,11 @@ def get_log_group_destinations(session, log_group_arn):
                                 mf_data["Alarms"].append(alarm_data)
                                 
                 except ClientError as e:
-                    print(f"Error getting alarms for metric {mf_data['MetricName']}: {str(e)}")
                     pass
             
             destinations["metric_filters"].append(mf_data)
 
     except (ClientError, IndexError) as e:
-        print(f"Error in get_log_group_destinations: {str(e)}")  # Debug
         pass
         
     return destinations
