@@ -271,6 +271,9 @@ function renderWafAclsTable(acls) {
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Destination Only</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sampled Requests</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Protected Resources</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Default Action</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Capacity</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rules</th>
             </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody>
         </table></div>
     </div>`;
@@ -306,7 +309,24 @@ function renderWafAclRow(acl) {
         <td class="px-4 py-4 align-top text-sm">${destinationOnlyHtml}</td>
         <td class="px-4 py-4 align-top whitespace-nowrap text-sm">${sampledBadge}</td>
         <td class="px-4 py-4 align-top text-sm">${resourcesHtml}</td>
+        <td class="px-4 py-4 align-top text-sm">${renderWafAction(acl.DefaultAction)}</td>
+        <td class="px-4 py-4 align-top text-sm">${acl.Capacity ?? 'Not collected'}</td>
+        <td class="px-4 py-4 align-top text-sm">${renderWafRules(acl.Rules)}</td>
     </tr>`;
+}
+
+function renderWafAction(action) {
+    if (!action || typeof action !== 'object') return 'Not collected';
+    const [name, config] = Object.entries(action)[0] || [];
+    if (!name) return 'Not collected';
+    const custom = config?.CustomResponse ? ` (custom response ${config.CustomResponse.ResponseCode ?? ''})` : '';
+    return `${name}${custom}`;
+}
+
+function renderWafRules(rules) {
+    if (!Array.isArray(rules)) return 'Not collected';
+    if (!rules.length) return 'None';
+    return html`<table class="min-w-full text-xs"><thead><tr><th class="text-left">Priority</th><th class="text-left">Name</th><th class="text-left">Action</th><th class="text-left">Statement</th></tr></thead><tbody>${join([...rules].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0)).map(rule => html`<tr><td>${rule.Priority ?? 'Not collected'}</td><td>${rule.Name ?? 'Not collected'}</td><td>${renderWafAction(rule.Action ?? rule.OverrideAction)}</td><td>${rule.StatementSummary ?? 'Not collected'}</td></tr>`))}</tbody></table>`;
 }
 
 function createLoggingStatusBadge(loggingConfig) {
