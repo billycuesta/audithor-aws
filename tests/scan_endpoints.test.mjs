@@ -16,7 +16,7 @@ const expected = [
 ];
 const runBlock = appSource.slice(appSource.indexOf('window.activeScanId = crypto.randomUUID();'), appSource.indexOf('const totalTests = Object.keys(apiCalls).length;'));
 assert.ok(runBlock.includes('const apiCalls = {'), 'actual scan entry request block found');
-const verify = async (base, prefix, requestBlock = runBlock) => {
+const verify = async (base, prefix, requestBlock = runBlock, payload = { access_key: 'dummy-access', secret_key: 'dummy-secret' }) => {
   const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://audithor.test/', runScripts: 'outside-only' });
   if (base !== undefined) dom.window.BACKEND_BASE = base;
   dom.window.eval(constantsSource);
@@ -25,11 +25,11 @@ const verify = async (base, prefix, requestBlock = runBlock) => {
     calls.push({ url, ...options, body: JSON.parse(options.body) });
     return Promise.resolve({ ok: true, json: async () => ({ metadata: {}, results: {} }) });
   };
-  const execute = new Function('window', 'fetch', 'crypto', 'JSON', `const payload = { access_key: 'dummy-access', secret_key: 'dummy-secret' }; ${requestBlock}\nreturn apiCalls;`);
+  const execute = new Function('window', 'fetch', 'crypto', 'JSON', `const payload = ${JSON.stringify(payload)}; ${requestBlock}\nreturn apiCalls;`);
   execute(dom.window, fetchStub, { randomUUID: () => 'test-scan' }, JSON);
   assert.equal(calls.length, 21);
   const api = dom.window.CONSTANTS.API;
-  assert.deepEqual(calls.map(({ url, method, body }) => ({ url, method, body })), expected.map(([runKey, apiKey]) => ({ url: api[apiKey], method: 'POST', body: { access_key: 'dummy-access', secret_key: 'dummy-secret' } })));
+  assert.deepEqual(calls.map(({ url, method, body }) => ({ url, method, body })), expected.map(([runKey, apiKey]) => ({ url: api[apiKey], method: 'POST', body: payload })));
   assert.ok(calls.every(({ url }) => typeof url === 'string' && !url.includes('undefined')));
   assert.ok(calls.every(({ url }) => url.startsWith(prefix)));
   dom.window.close();
@@ -38,4 +38,5 @@ const originalBrokenBlock = runBlock.replace('window.CONSTANTS.API.RUNS.iam', "w
 await assert.rejects(verify(undefined, '/api/', originalBrokenBlock), /deep-equal|undefined|startsWith/);
 await verify(undefined, '/api/');
 await verify('https://backend.example/root/', 'https://backend.example/root/api/');
+await verify(undefined, '/api/', runBlock, { profile: 'audit' });
 console.log('Actual scan request block issued all 21 configured POSTs with dummy credentials for default and custom backend bases');

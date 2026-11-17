@@ -1,6 +1,7 @@
 import { coverageOf, isMigratedCollector, failedCollectionResponse } from './collection.js';
 import { createProgressTracker, renderProgress, hideProgress } from './progress.js';
 import { html, raw, setHtml, act, installActionDelegation } from './safe_html.js';
+import { buildCredentialPayload, validateCredentials, initCredentialControls, loadProfiles, syncCredentialMode } from './credentials.js';
 /**
  * app.js
  * Fichero principal (el "cerebro") de la lógica de la aplicación AudiThor.
@@ -423,6 +424,7 @@ const setWorkspaceVisibility = (showMainApp) => {
 };
 
 const syncCredentialsBetweenForms = (source = 'main') => {
+    syncCredentialMode(source);
     if (source === 'landing') {
         if (accessKeyInput && landingAccessKeyInput) accessKeyInput.value = landingAccessKeyInput.value;
         if (secretKeyInput && landingSecretKeyInput) secretKeyInput.value = landingSecretKeyInput.value;
@@ -478,7 +480,7 @@ const runAnalysisFromInputs = async (source = 'main') => {
     const controls = getScanControls(source);
     const { runBtn, accessInput, secretInput, tokenInput, spinner, btnText, errorDiv } = controls;
 
-    if (!runBtn || !accessInput || !secretInput || !spinner || !btnText || !errorDiv) return;
+    if (!runBtn || !spinner || !btnText || !errorDiv) return;
 
     if (source === 'landing') {
         syncCredentialsBetweenForms('landing');
@@ -492,18 +494,15 @@ const runAnalysisFromInputs = async (source = 'main') => {
     setHtml(document.getElementById('iam-view'), raw(createInitialEmptyState()));
     
     log('Starting full analysis...', 'info');
-    const accessKey = accessInput.value.trim(); 
-    const secretKey = secretInput.value.trim(); 
-    const sessionToken = tokenInput.value.trim();
-    if (!accessKey || !secretKey) { 
-        const msg = 'Please enter the Access Key ID and Secret Access Key.'; 
+    const validationMessage = validateCredentials();
+    if (validationMessage) { 
+        const msg = validationMessage; 
         errorDiv.textContent = msg; 
         errorDiv.classList.remove('hidden'); 
         log(msg, 'error'); 
         return; 
     }
-    const payload = { access_key: accessKey, secret_key: secretKey };
-    if (sessionToken) { payload.session_token = sessionToken; }
+    const payload = buildCredentialPayload();
     
     runBtn.disabled = true; 
     spinner.classList.remove('hidden'); 
@@ -1091,6 +1090,8 @@ const deleteAuditorNote = (noteId) => {
 
 // 5. PUNTO DE ENTRADA
 document.addEventListener('DOMContentLoaded', () => {
+    initCredentialControls();
+    loadProfiles();
     installActionDelegation();
     landingView = document.getElementById('landing-view');
     mainAppView = document.getElementById('main-app-view');
