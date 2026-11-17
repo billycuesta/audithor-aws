@@ -202,6 +202,10 @@ const renderLambdaFunctionsTable = (functionsToRender, allFunctions, selectedReg
         const scopeButton = html`<button ${act('openScopeModal', f.ARN, encodeURIComponent(scopeComment))} title="${isScoped ? `Marcado: ${scopeComment}` : 'Marcar este recurso'}" class="p-1 rounded-full hover:bg-gray-200 transition">${scopeIcon}</button>`;
         const vipBadge = roleDetails?.IsPrivileged ? html`<span class="bg-yellow-200 text-yellow-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">VIP</span>` : html``;
         const tagsHtml = tagCount ? html`<button ${act('openModalWithLambdaTags', originalIndex)} class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition whitespace-nowrap">View (${tagCount})</button>` : '-';
+        const activityCollected = f.Enrichment?.activity?.status === 'complete';
+        const invocations = activityCollected ? f.Invocations90d : 'Not collected';
+        const lastInvocationDate = activityCollected ? (f.LastInvocationDate || 'None') : 'Not collected';
+        const invocationStatus = activityCollected ? (f.Invocations90d === 0 ? 'Unused' : 'Active') : 'Not collected';
         return html`<tr class="${isScoped ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-gray-50'}">
             <td class="px-2 py-4 whitespace-nowrap text-sm text-center">${scopeButton}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${f.Region}</td>
@@ -210,10 +214,13 @@ const renderLambdaFunctionsTable = (functionsToRender, allFunctions, selectedReg
             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${f.Runtime}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-600">${vpcId}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm">${tagsHtml}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${invocations}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${lastInvocationDate}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm">${invocationStatus}</td>
         </tr>`;
     });
     return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">${filterControlsHtml}<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
-        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Function Name</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Execution Role</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Runtime</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPC ID</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tags</th>
+        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Function Name</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Execution Role</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Runtime</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">VPC ID</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tags</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invocations (90d)</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Invocation</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Activity</th>
     </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div></div>`;
 };
 
