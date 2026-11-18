@@ -25,11 +25,6 @@ export const buildIamView = () => {
             <div><h2 class="text-2xl font-bold text-[#204071]">Identity & Access</h2><p class="text-sm text-gray-500 scan-info"></p></div>
         </header>
         
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <h3 class="text-sm font-semibold text-blue-800 mb-2">Audit Guidance</h3>
-            <p class="text-sm text-blue-700">Review Identity and Access Management components to ensure proper access controls, compliance with least privilege principle, and adequate security measures. Each tab provides specific audit considerations for different IAM components.</p>
-        </div>
-        
         <div class="border-b border-gray-200 mb-6">
             <nav class="-mb-px flex flex-wrap space-x-6" id="iam-tabs">
                 <a href="#" data-tab="resumen-content" class="tab-link py-3 px-1 border-b-2 border-[#eb3496] text-[#eb3496] font-semibold text-sm">Summary</a>

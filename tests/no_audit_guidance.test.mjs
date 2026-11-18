@@ -5,11 +5,12 @@ import { JSDOM } from 'jsdom';
 
 const viewsDir = new URL('../audithor/static/js/views/', import.meta.url);
 const entries = await readdir(viewsDir);
-for (const file of entries.filter(name => name.endsWith('.js') && name !== '01_iam.js')) {
+for (const file of entries.filter(name => name.endsWith('.js'))) {
   assert.doesNotMatch(await readFile(new URL(file, viewsDir), 'utf8'), /Audit Guidance/, `${file} source must not contain Audit Guidance`);
 }
 
 const specs = [
+  ['01_iam.js', 'buildIamView', 'iam-view', 'iamApiData', { users: [], groups: [], roles: [], password_policy: {}, region_guardrails: null }],
   ['02_exposure.js', 'buildExposureView', 'exposure-view', 'exposureApiData', { details: { 'S3 Public Buckets': {}, 'EC2 Public Instances': { all: [] }, 'Security Groups Open': {}, 'ALB/NLB Public': {}, 'Lambda URLs': {}, 'API Gateway Public': {}, 'Route53 Subdomains': {}, 'Lambda Credential Harvesting': {}, 'CloudFront Distributions': { Global: [] }, 'API Custom Domains': {} }, network_ports: [], lambda_credentials: [], summary: {} }],
   ['03_guardduty.js', 'buildGuarddutyView', 'guardduty-view', 'guarddutyApiData', { status: [], findings: [] }],
   ['04_ecr.js', 'buildEcrView', 'ecr-view', 'ecrApiData', { repositories: [] }],
@@ -21,11 +22,11 @@ const specs = [
   ['18_codepipeline.js', 'buildCodePipelineView', 'codepipeline-view', 'codepipelineApiData', { pipelines: [] }]
 ];
 for (const [file, builder, rootId, dataName, results] of specs) {
-  const dom = new JSDOM(`<div id="${rootId}"></div><div id="sh-ecr-findings-container"></div><div id="sh-waf-findings-container"></div>`, { url: 'http://localhost/' });
+  const dom = new JSDOM(`<div id="${rootId}"></div><div id="sh-ecr-findings-container"></div><div id="sh-waf-findings-container"></div><div id="details-modal" class="hidden"><h2 id="modal-title"></h2><div id="modal-content"></div></div><div id="sh-iam-findings-container"></div>`, { url: 'http://localhost/' });
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
   window[dataName] = { metadata: { executionDate: '2026-01-01' }, results };
-  window.securityHubApiData = { results: { findings: { exposureFindings: [], ecrFindings: [], wafFindings: [], cloudwatchFindings: [] } } };
+  window.securityHubApiData = { results: { findings: { exposureFindings: [], iamFindings: [], ecrFindings: [], wafFindings: [], cloudwatchFindings: [] } } };
   window.scopedResources = {};
   window.allAvailableRegions = [];
   window.computeApiData = { results: { ec2_instances: [] } };
