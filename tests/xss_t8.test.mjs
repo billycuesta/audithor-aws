@@ -73,12 +73,34 @@ for (const config of configs) {
   // Exercise every view tab in both implementations.
   const tabLinks = [...current.root.querySelectorAll('nav a[data-tab]')];
   const baseLinks = [...baseline.root.querySelectorAll('nav a[data-tab]')];
-  assert.equal(tabLinks.length, baseLinks.length);
-  for (let i = 0; i < tabLinks.length; i++) {
-    tabLinks[i].click();
-    baseLinks[i].click();
-    compareText(benignText(current.root), benignText(baseline.root), `${config.name} tab ${i} text parity`);
-    compareTags(tagSequence(current.root), tagSequence(baseline.root), `${config.name} tab ${i} tag parity`);
+  if (config.module === '14_connectivity') {
+    const currentTabIds = tabLinks.map(link => link.dataset.tab);
+    const baseTabIds = baseLinks.map(link => link.dataset.tab);
+    assertOrderedSubsequence(currentTabIds, baseTabIds, `${config.name} baseline tab ids`);
+    for (const baseLink of baseLinks) {
+      const currentLink = tabLinks.find(link => link.dataset.tab === baseLink.dataset.tab);
+      assert.ok(currentLink, `${config.name} retains baseline tab ${baseLink.dataset.tab}`);
+      currentLink.click();
+      baseLink.click();
+      const currentPane = current.root.querySelector(`#${currentLink.dataset.tab}`);
+      const basePane = baseline.root.querySelector(`#${baseLink.dataset.tab}`);
+      assert.ok(currentPane, `${config.name} current pane ${currentLink.dataset.tab}`);
+      assert.ok(basePane, `${config.name} baseline pane ${baseLink.dataset.tab}`);
+      compareText(benignText(currentPane), benignText(basePane), `${config.name} tab ${baseLink.dataset.tab} text parity`);
+      compareTags(tagSequence(currentPane), tagSequence(basePane), `${config.name} tab ${baseLink.dataset.tab} tag parity`);
+    }
+    for (const currentLink of tabLinks.filter(link => !baseTabIds.includes(link.dataset.tab))) {
+      currentLink.click();
+      assertNoInjection(current.dom.window, current.root);
+    }
+  } else {
+    assert.equal(tabLinks.length, baseLinks.length);
+    for (let i = 0; i < tabLinks.length; i++) {
+      tabLinks[i].click();
+      baseLinks[i].click();
+      compareText(benignText(current.root), benignText(baseline.root), `${config.name} tab ${i} text parity`);
+      compareTags(tagSequence(current.root), tagSequence(baseline.root), `${config.name} tab ${i} tag parity`);
+    }
   }
 
   if (config.module === '12_kms_secrets') {

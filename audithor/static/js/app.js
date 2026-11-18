@@ -293,6 +293,8 @@ const openNotesModal = (noteId = null) => {
     titleInput.focus();
 };
 
+const DEFAULT_VIEW = 'inventory';
+
 const rerenderCurrentView = () => {
     log('Rerendering view(s) to reflect state changes...', 'info');
 
@@ -461,18 +463,18 @@ const getScanControls = (source = 'main') => {
 
 const activateDefaultViewPostScan = () => {
     document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
-    const iamViewToShow = document.getElementById('iam-view');
-    if (iamViewToShow) iamViewToShow.classList.remove('hidden');
+    const defaultViewElement = document.getElementById(`${DEFAULT_VIEW}-view`);
+    if (defaultViewElement) defaultViewElement.classList.remove('hidden');
 
     const sidebarLinks = document.querySelectorAll('#sidebar-nav a.main-nav-link');
     sidebarLinks.forEach(link => {
         link.classList.remove('bg-[#eb3496]');
         link.classList.add('hover:bg-[#1a335a]');
     });
-    const activeIamLink = document.querySelector('#sidebar-nav a[data-view="iam"]');
-    if (activeIamLink) {
-        activeIamLink.classList.add('bg-[#eb3496]');
-        activeIamLink.classList.remove('hover:bg-[#1a335a]');
+    const activeDefaultLink = document.querySelector(`#sidebar-nav a[data-view="${DEFAULT_VIEW}"]`);
+    if (activeDefaultLink) {
+        activeDefaultLink.classList.add('bg-[#eb3496]');
+        activeDefaultLink.classList.remove('hover:bg-[#1a335a]');
     }
 };
 
@@ -671,7 +673,7 @@ const buildAndRenderAllViews = () => {
     };
 
     log('Rendering all views…', 'info');
-    safeRender('inventory', buildInventoryView);
+    safeRender(DEFAULT_VIEW, buildInventoryView);
     safeRender('iam', buildIamView);
     safeRender('exposure', buildExposureView);
     safeRender('guardduty', buildGuarddutyView);

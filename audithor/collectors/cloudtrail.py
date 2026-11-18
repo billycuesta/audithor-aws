@@ -1,12 +1,15 @@
 # collectors/cloudtrail.py
 import json
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
+from botocore.config import Config
 from datetime import datetime, timedelta
 import pytz
 from .utils import get_all_aws_regions # Importación relativa
 from .cloudwatch import get_log_group_destinations
-from .diagnostics import classify_error
+from .diagnostics import AWS_CONFIG, classify_error
+
+LOOKUP_WINDOW_DAYS = 90
 
 
 def _enrich_trail(session, client, trail, bucket_cache):
@@ -78,7 +81,7 @@ def collect_cloudtrail_data(session: boto3.Session):
     1. Describes all CloudTrail trails in the account, correctly handling
        multi-region trails to avoid duplicates.
     2. Searches for a specific list of security-sensitive API calls across all
-       regions from the last 7 days.
+       regions from the last 90 days.
     3. Runs a separate analysis function ('run_trailguard_analysis') on the
        collected trail configurations to check for potential issues.
 
@@ -132,21 +135,27 @@ def collect_cloudtrail_data(session: boto3.Session):
         except ClientError:
             continue # Failed to describe trails in region, continue to next region
 
-    # --- 2. Search for Notable Events (Last 7 Days) ---
+    # --- 2. Search for Notable Events ---
     events_to_search = [
         "ConsoleLogin", "CreateUser", "DeleteUser", "CreateTrail", "StopLogging",
         "UpdateTrail", "DeleteTrail", "CreateLoginProfile", "DeleteLoginProfile",
         "AuthorizeSecurityGroupIngress", "RevokeSecurityGroupIngress",
         "StartInstances", "StopInstances", "TerminateInstances",
-        "DisableKey", "ScheduleKeyDeletion"
+        "DisableKey", "ScheduleKeyDeletion", "CreateSecurityGroup", "DeleteSecurityGroup",
+        "AuthorizeSecurityGroupEgress", "RevokeSecurityGroupEgress", "ModifySecurityGroupRules",
+        "CreateNetworkAcl", "CreateNetworkAclEntry", "ReplaceNetworkAclEntry", "DeleteNetworkAclEntry",
+        "CreateRoute", "ReplaceRoute", "DeleteRoute", "CreateTransitGatewayRoute",
+        "UpdateFirewallPolicy", "UpdateRuleGroup"
     ]
 
     end_time = datetime.now(pytz.utc)
-    start_time = end_time - timedelta(days=7)
+    start_time = end_time - timedelta(days=LOOKUP_WINDOW_DAYS)
+    event_region_results = {}
 
     for region in regions:
         try:
-            client = session.client("cloudtrail", region_name=region)
+            client = session.client("cloudtrail", region_name=region,
+                                    config=AWS_CONFIG.merge(Config(retries={"mode": "adaptive", "max_attempts": 5})))
             for event_name in events_to_search:
                 paginator = client.get_paginator('lookup_events')
                 page_iterator = paginator.paginate(
@@ -157,6 +166,8 @@ def collect_cloudtrail_data(session: boto3.Session):
                 for page in page_iterator:
                     for event in page.get('Events', []):
                         event_data = json.loads(event.get('CloudTrailEvent', '{}'))
+                        identity = event_data.get("userIdentity", {})
+                        attributes = identity.get("sessionContext", {}).get("attributes", {})
                         result_events.append({
                             "EventName": event.get("EventName"),
                             "EventTime": str(event.get("EventTime")),
@@ -166,10 +177,14 @@ def collect_cloudtrail_data(session: boto3.Session):
                             "RequestParameters": event_data.get("requestParameters", {}),
                             "ErrorCode": event_data.get("errorCode"),
                             "ErrorMessage": event_data.get("errorMessage"),
-                            "MFAUsed": (event_data.get("userIdentity", {}).get("sessionContext", {}).get("attributes", {}).get("mfaAuthenticated") == "true") if "mfaAuthenticated" in event_data.get("userIdentity", {}).get("sessionContext", {}).get("attributes", {}) else None
+                            "MFAUsed": attributes.get("mfaAuthenticated") == "true" if "mfaAuthenticated" in attributes else None
                         })
-        except ClientError:
-            continue # Failed to look up events in this region
+            event_region_results[region] = {"status": "complete"}
+        except (ClientError, BotoCoreError) as exc:
+            event_region_results[region] = {"status": "failed", "reason": classify_error(exc)["category"]}
+
+    failed_regions = {region: outcome for region, outcome in event_region_results.items() if outcome["status"] == "failed"}
+    enrichment_status = "failed" if failed_regions and not result_events else "partial" if failed_regions else "complete"
 
     # Sort events from most recent to oldest
     result_events.sort(key=lambda x: x['EventTime'], reverse=True)
@@ -177,11 +192,14 @@ def collect_cloudtrail_data(session: boto3.Session):
     # --- 3. Run Configuration Analysis ---
     trailguard_findings = run_trailguard_analysis(session, result_trails)
     
-    return {
+    results = {
         "trails": result_trails,
         "events": result_events,
-        "trailguard_findings": trailguard_findings
+        "trailguard_findings": trailguard_findings,
+        "LookupWindowDays": LOOKUP_WINDOW_DAYS,
+        "Enrichment": {"events": {"status": enrichment_status, "regions": event_region_results}}
     }
+    return results
 
 def lookup_cloudtrail_events(session, region, event_name, start_time, end_time):
     """

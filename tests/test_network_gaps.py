@@ -8,7 +8,11 @@ from audithor.collectors.connectivity import collect_connectivity_data
 class Session:
     region_name = 'us-east-1'
     def __init__(self, clients): self.clients = clients
-    def client(self, service, **kwargs): return self.clients[service]
+    def client(self, service, **kwargs):
+        if service in self.clients: return self.clients[service]
+        client = Mock()
+        client.get_paginator.return_value.paginate.return_value = []
+        return client
 
 def ec2_mock():
     c = Mock()
@@ -64,6 +68,8 @@ def test_route_table_and_endpoint_coverage_stubbed():
         stub.add_response('describe_vpc_endpoints',{'VpcEndpoints':[{'VpcEndpointId':'vpce-1','VpcId':'vpc-1','ServiceName':'com.amazonaws.us-east-1.s3','VpcEndpointType':'Gateway','State':'available'},{'VpcEndpointId':'vpce-2','VpcId':'vpc-1','ServiceName':'com.amazonaws.us-east-1.dynamodb','VpcEndpointType':'Gateway','State':'available'},{'VpcEndpointId':'vpce-3','VpcId':'vpc-1','ServiceName':'com.amazonaws.us-east-1.kms','VpcEndpointType':'Interface','State':'available'}]}, {})
         stub.add_response('describe_nat_gateways',{'NatGateways':[]}, {})
         stub.add_response('describe_route_tables',{'RouteTables':[{'RouteTableId':'rtb-1','VpcId':'vpc-1','Routes':[{'DestinationCidrBlock':'0.0.0.0/0','GatewayId':'igw-1'}],'Associations':[{'Main':True}]},{'RouteTableId':'rtb-2','VpcId':'vpc-2','Routes':[],'Associations':[{'Main':True}]}]}, {})
+        stub.add_response('describe_transit_gateways', {'TransitGateways': []}, {})
+        stub.add_response('describe_transit_gateway_route_tables', {'TransitGatewayRouteTables': []}, {})
         result=collect_connectivity_data(Session({'ec2':client}))
         stub.assert_no_pending_responses()
     assert result['route_tables'][0]['Routes'][0]['GatewayId']=='igw-1'

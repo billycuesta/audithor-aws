@@ -120,13 +120,7 @@ export const buildExposureView = () => {
         <header class="flex justify-between items-center mb-6">
             <div><h2 class="text-2xl font-bold text-[#204071]">Internet Exposure</h2><p class="text-sm text-gray-500">${window.exposureApiData.metadata.executionDate}</p></div>
         </header>
-        
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <h3 class="text-sm font-semibold text-blue-800 mb-2">Audit Guidance</h3>
-            <p class="text-sm text-blue-700">Review internet-exposed resources to ensure they follow security best practices and have legitimate business justification. Each tab provides specific audit considerations and security implications for that exposure type.</p>
-        </div>
-        
-        <div class="border-b border-gray-200 mb-6"><nav class="-mb-px flex flex-wrap space-x-6">${join(tabs)}</nav></div>
+<div class="border-b border-gray-200 mb-6"><nav class="-mb-px flex flex-wrap space-x-6">${join(tabs)}</nav></div>
         <div>${join(content)}</div>`);
 
     updateExposureSummaryCards(window.exposureApiData.results.summary, securityHubFindings);
@@ -407,11 +401,14 @@ const renderPublicLoadBalancersTable = (loadBalancersByRegion) => {
     if (!allLbs.length) return html`<div class="bg-white p-6 rounded-xl border border-gray-100"><p class="text-center text-gray-500">No public Load Balancers were found.</p></div>`;
     const rows = [];
     allLbs.forEach((lb, lbIndex) => {
-        if (lb.listeners.length) lb.listeners.forEach((listener, listenerIndex) => rows.push(html`<tr class="hover:bg-blue-50 cursor-pointer" ${act('openModalWithResourceMap', lbIndex)}>
+        if (lb.listeners.length) lb.listeners.forEach((listener, listenerIndex) => {
+            const isTlsListener = ['HTTPS', 'TLS'].includes(listener.protocol) || Array.isArray(listener.tlsVersions);
+            rows.push(html`<tr class="hover:bg-blue-50 cursor-pointer" ${act('openModalWithResourceMap', lbIndex)}>
             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${lb.region}</td><td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${lb.name}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${listener.port} (${listener.protocol})</td><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${listener.policyName}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${listener.isOutdated ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${listener.isOutdated ? 'Outdated' : 'Secure'}</span></td>
-            <td class="px-4 py-4 text-center"><button ${act('openModalWithTlsDetails', lbIndex, listenerIndex)} class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition">Details</button></td></tr>`));
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${listener.port ?? 'Not collected'} (${listener.protocol || 'Not collected'})</td><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">${listener.policyName || 'Not applicable'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${isTlsListener ? (listener.isOutdated ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800') : 'bg-red-100 text-red-800'}">${isTlsListener ? (listener.isOutdated ? 'Outdated' : 'Secure') : 'Unencrypted'}</span></td>
+            <td class="px-4 py-4 text-center">${isTlsListener ? html`<button ${act('openModalWithTlsDetails', lbIndex, listenerIndex)} class="bg-[#204071] text-white px-3 py-1 text-xs font-bold rounded-md hover:bg-[#1a335a] transition">Details</button>` : html`<span class="text-sm text-gray-600">${(listener.defaultActionTypes || []).join(', ') || 'Not collected'}; ${(listener.targetGroupArns || []).join(', ') || 'None'}</span>`}</td></tr>`);
+        });
         else rows.push(html`<tr class="hover:bg-gray-50"><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${lb.region}</td><td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${lb.name}</td><td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 italic" colspan="4">No HTTPS/TLS listeners</td></tr>`);
     });
     return html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>

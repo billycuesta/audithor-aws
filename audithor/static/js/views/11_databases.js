@@ -51,13 +51,7 @@ export const buildDatabasesView = () => {
                 <p class="text-sm text-gray-500">${window.databasesApiData.metadata.executionDate}</p>
             </div>
         </header>
-
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <h3 class="text-sm font-semibold text-blue-800 mb-2">Audit Guidance</h3>
-            <p class="text-sm text-blue-700">Review database configurations to ensure data integrity, availability, and confidentiality. Each tab provides specific audit considerations for that database service type.</p>
-        </div>
-
-        <div class="border-b border-gray-200 mb-6">
+<div class="border-b border-gray-200 mb-6">
             <nav class="-mb-px flex flex-wrap space-x-6" id="databases-tabs">
                 <a href="#" data-tab="db-summary-content" class="tab-link py-3 px-1 border-b-2 border-[#eb3496] text-[#eb3496] font-semibold text-sm">Summary</a>
                 <a href="#" data-tab="db-rds-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">RDS Instances (${rds_instances.length})</a>
