@@ -1,0 +1,14 @@
+import { JSDOM } from 'jsdom';
+import assert from 'node:assert/strict';
+const {window}=new JSDOM('<div id="cloudtrail-view"></div>');globalThis.window=window;globalThis.document=window.document;
+window.allAvailableRegions=[];window.securityHubApiData={results:{findings:{cloudtrailFindings:[]}}};
+const payload={metadata:{executionDate:'2026-01-01'},results:{trails:[],events:[{EventName:'CreateRoute',EventTime:'2026-01-01T00:00:00Z',Username:'auditor',EventRegion:'us-east-1',SourceIPAddress:'1.2.3.4',ErrorCode:null,ErrorMessage:null,MFAUsed:false,NetworkChangeCategory:'<img src=x onerror=alert(1)>'},{EventName:'CreateSecurityGroup',EventTime:'2026-01-02T00:00:00Z',Username:'auditor',EventRegion:'us-east-1',SourceIPAddress:'1.2.3.4',MFAUsed:true}],trailguard_findings:[],LookupWindowDays:90,Enrichment:{events:{status:'complete',regions:{'us-east-1':{status:'complete'}}}}}};
+window.cloudtrailApiData=payload;
+const view=await import('../audithor/static/js/views/06_cloudtrail.js');view.buildCloudtrailView();
+const root=document.getElementById('cloudtrail-view');
+assert.match(root.textContent,/Last 90 days/);assert.match(root.textContent,/Changes older than the window require the trail's S3 logs or AWS Config/i);assert.match(root.textContent,/Change category/);assert.match(root.textContent,/CreateRoute/);
+const rows=[...root.querySelectorAll('#ct-events-content tbody tr')];const eventCells=rows[0].querySelectorAll('td');assert.equal(eventCells.length,8);assert.equal(eventCells[1].textContent,'CreateRoute');assert.equal(eventCells[2].textContent,'auditor');assert.equal(eventCells[3].textContent,'us-east-1');assert.equal(eventCells[4].textContent,'1.2.3.4');assert.equal(eventCells[7].textContent,'<img src=x onerror=alert(1)>');assert.equal(rows[1].querySelectorAll('td')[7].textContent,'Security groups');
+assert.equal(root.querySelector('img'),null);assert.match(root.textContent,/<img src=x onerror=alert\(1\)>/);
+window.cloudtrailApiData={metadata:{executionDate:'2026-01-01'},results:{trails:[],events:[],trailguard_findings:[]}};view.buildCloudtrailView();
+assert.match(root.textContent,/Not collected/);
+console.log('CloudTrail network evidence view checks passed');
