@@ -90,6 +90,7 @@ export const buildConnectivityView = () => {
                 ${renderVpcEndpointsTable(vpc_endpoints)}
                 ${renderRouteTables(window.connectivityApiData.results.route_tables, window.connectivityApiData.results.Enrichment?.routeTables)}
                 ${renderEndpointCoverage(window.connectivityApiData.results.endpoint_coverage, window.connectivityApiData.results.Enrichment?.endpointCoverage)}
+                ${renderNewNetworkDetails(window.connectivityApiData.results)}
             </div>
             <div id="conn-natgateways-content" class="connectivity-tab-content hidden">
                 ${renderServiceDescription(serviceDescriptions.natgateways)}
@@ -100,6 +101,42 @@ export const buildConnectivityView = () => {
     
     const tabsNav = container.querySelector('#connectivity-tabs');
     if (tabsNav) tabsNav.addEventListener('click', handleTabClick(tabsNav, '.connectivity-tab-content'));
+};
+
+const renderNewNetworkDetails = (results) => {
+    const firewalls = results.network_firewalls || [];
+    const gateways = results.transit_gateways || [];
+    const routes = results.tgw_route_tables || [];
+    const shares = results.tgw_shares || [];
+    const cellClass = 'px-4 py-4 text-sm text-gray-600';
+    const headerClass = 'px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase';
+    const table = rows => html`<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">${rows}</table></div>`;
+    const headers = labels => html`<thead class="bg-gray-50"><tr>${labels.map(label => html`<th class="${headerClass}">${label}</th>`)}</tr></thead>`;
+    const firewallRows = firewalls.length ? firewalls.map(f => {
+        const actions = f.DefaultActions || {};
+        const stateless = actions.StatelessDefaultActions || [];
+        const fragments = actions.StatelessFragmentDefaultActions || [];
+        const stateful = actions.StatefulDefaultActions || [];
+        const actionText = `Stateless: ${stateless.join(', ') || 'Not collected'} · Fragments: ${fragments.join(', ') || 'Not collected'} · Stateful: ${stateful.join(', ') || 'Not collected'} · Rule order: ${actions.StatefulEngineOptions?.RuleOrder || 'Not collected'}`;
+        const groups = (f.RuleGroups || []).map(g => {
+            const summary = g.RulesSummary;
+            let summaryView = '';
+            if (summary && typeof summary === 'object' && summary.Targets) {
+                summaryView = html`<p class="text-xs text-gray-600">Targets: ${summary.Targets.join(', ') || 'None'} · Types: ${(summary.TargetTypes || []).join(', ') || 'None'}</p>`;
+            } else if (typeof summary === 'string') {
+                const firstLines = summary.split(/\r?\n/).slice(0, 5).join('\n');
+                summaryView = html`<details class="mt-1"><summary class="cursor-pointer text-xs text-gray-600">Suricata rules (first lines)</summary><pre class="mt-1 whitespace-pre-wrap text-xs">${firstLines}</pre></details>`;
+            } else if (summary && typeof summary === 'object') {
+                summaryView = html`<p class="text-xs text-gray-600">${summary.StatelessRuleCount !== undefined ? `Stateless rules: ${summary.StatelessRuleCount}` : `Stateful rules: ${summary.StatefulRuleCount ?? 0}`}</p>`;
+            }
+            return html`<div class="mb-2"><p class="font-medium text-gray-800">${g.RuleGroupName || 'Unnamed rule group'} <span class="font-normal text-gray-600">(${g.Type || '-'}, capacity ${g.Capacity ?? '-'})</span></p><p class="break-all text-xs text-gray-500">${g.RuleGroupArn || 'ARN not collected'}</p>${summaryView}</div>`;
+        });
+        return html`<tr><td class="${cellClass}">${f.Region}</td><td class="${cellClass}">${f.VpcId || '-'}</td><td class="${cellClass}"><span>${actionText}</span>${stateless.includes('aws:pass') ? html`<p class="mt-1 font-semibold text-amber-700">Passes traffic without inspection</p>` : ''}</td><td class="${cellClass}">${join(groups) || 'None'}</td><td class="${cellClass}">${Array.isArray(f.Logging) ? f.Logging.map(l => `${l.LogType || '-'}: ${l.LogDestinationType || '-'}`).join(', ') || 'Not configured' : f.Logging || 'Not configured'}</td></tr>`;
+    }) : [html`<tr><td colspan="5" class="px-4 py-3 text-sm text-gray-500">${results.Enrichment?.networkFirewall ? 'None found' : 'Not collected'}</td></tr>`];
+    const gatewayRows = gateways.length ? gateways.map(g => html`<tr><td class="${cellClass}">${g.TransitGatewayId || '-'}</td><td class="${cellClass}">${g.OwnerId || '-'}</td><td class="${cellClass}">${g.DefaultRouteTableAssociation || 'Not collected'}${g.AssociationDefaultRouteTableId ? ` (${g.AssociationDefaultRouteTableId})` : ''}</td><td class="${cellClass}">${g.DefaultRouteTablePropagation || 'Not collected'}${g.PropagationDefaultRouteTableId ? ` (${g.PropagationDefaultRouteTableId})` : ''}</td><td class="${cellClass}">${g.AutoAcceptSharedAttachments === 'enable' ? html`<span class="font-semibold text-amber-700">Enabled — shared attachments auto-accepted</span>` : g.AutoAcceptSharedAttachments || 'Not collected'}</td></tr>`) : [html`<tr><td colspan="5" class="px-4 py-3 text-sm text-gray-500">${results.Enrichment?.transitGateways ? 'None found' : 'Not collected'}</td></tr>`];
+    const routeRows = routes.length ? routes.map(t => html`<tr><td class="${cellClass}">${t.Region}</td><td class="${cellClass}">${t.TransitGatewayRouteTableId}</td><td class="${cellClass}">${(t.Associations || []).map(a => a.ResourceId || a.TransitGatewayAttachmentId || '-').join(', ') || 'None'}</td><td class="${cellClass}">${(t.Propagations || []).map(a => a.ResourceId || a.TransitGatewayAttachmentId || '-').join(', ') || 'None'}</td><td class="${cellClass}">${(t.Routes || []).map(r => `${r.DestinationCidrBlock || '-'} ${r.Type || '-'} ${r.State === 'blackhole' ? 'BLACKHOLE' : r.State || '-'} ${(r.TransitGatewayAttachments || []).map(a => a.TransitGatewayAttachmentId || a.ResourceId || '-').join(',')}`).join('; ') || 'None'}${t.AdditionalRoutesAvailable ? ' (Routes truncated)' : ''}</td></tr>`) : [html`<tr><td colspan="5" class="px-4 py-3 text-sm text-gray-500">${results.Enrichment?.tgwRouting ? 'None found' : 'Not collected'}</td></tr>`];
+    const principalRows = shares.length ? shares.map(s => html`<tr><td class="${cellClass}">${s.Region}</td><td class="${cellClass}">${s.ShareArn}</td><td class="${cellClass}">${s.Principal || '-'}</td><td class="${cellClass}">${s.External ? 'External account' : 'Internal'}</td></tr>`) : [html`<tr><td colspan="4" class="px-4 py-3 text-sm text-gray-500">${results.Enrichment?.tgwShares ? 'None found' : 'Not collected'}</td></tr>`];
+    return html`<h3 class="text-lg font-semibold text-gray-800 mt-6">Network Firewalls</h3>${table(html`${headers(['Region', 'VPC', 'Default actions', 'Rule groups', 'Logging'])}<tbody class="bg-white divide-y divide-gray-200">${join(firewallRows)}</tbody>`)}<h3 class="text-lg font-semibold text-gray-800 mt-6">Transit Gateway Settings</h3>${table(html`${headers(['Transit Gateway', 'Owner', 'Default association', 'Default propagation', 'Auto-accept shared attachments'])}<tbody class="bg-white divide-y divide-gray-200">${join(gatewayRows)}</tbody>`)}<h3 class="text-lg font-semibold text-gray-800 mt-6">TGW Route Tables</h3>${table(html`${headers(['Region', 'Route table', 'Associations', 'Propagations', 'Routes'])}<tbody class="bg-white divide-y divide-gray-200">${join(routeRows)}</tbody>`)}<h3 class="text-lg font-semibold text-gray-800 mt-6">RAM Principals</h3>${table(html`${headers(['Region', 'Share', 'Principal', 'Account'])}<tbody class="bg-white divide-y divide-gray-200">${join(principalRows)}</tbody>`)}${''}`;
 };
 
 // --- SERVICE DESCRIPTION RENDERER ---
