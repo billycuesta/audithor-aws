@@ -432,17 +432,29 @@ def collect_exposure_data(session):
                         listeners = client.describe_listeners(LoadBalancerArn=lb_arn).get("Listeners", [])
                         listener_details = []
                         for listener in listeners:
-                            if listener.get("Protocol") in ["HTTPS", "TLS"]:
+                            protocol = listener.get("Protocol")
+                            actions = listener.get("DefaultActions", [])
+                            target_group_arns = []
+                            for action in actions:
+                                if action.get("TargetGroupArn"):
+                                    target_group_arns.append(action["TargetGroupArn"])
+                                target_group_arns.extend(target.get("TargetGroupArn") for target in action.get("ForwardConfig", {}).get("TargetGroups", []) if target.get("TargetGroupArn"))
+                            listener_record = {
+                                "port": listener.get("Port"), "protocol": protocol,
+                                "defaultActionTypes": [action.get("Type") for action in actions],
+                                "targetGroupArns": target_group_arns
+                            }
+                            if protocol in ["HTTPS", "TLS"]:
                                 policy_name = listener.get("SslPolicy")
                                 policy_details = ssl_policies_details.get(policy_name, {})
                                 tls_versions = policy_details.get('SslProtocols', [])
                                 ciphers = [c['Name'] for c in policy_details.get('Ciphers', [])]
                                 is_outdated = any(v in ['TLSv1.0', 'TLSv1.1', 'SSLv3'] for v in tls_versions)
-                                listener_details.append({
-                                    "port": listener.get("Port"), "protocol": listener.get("Protocol"),
+                                listener_record.update({
                                     "policyName": policy_name, "isOutdated": is_outdated,
                                     "tlsVersions": tls_versions, "ciphers": ciphers
                                 })
+                            listener_details.append(listener_record)
                         exposed.append({
                             "name": lb["LoadBalancerName"], "arn": lb_arn,
                             "region": region, "listeners": listener_details

@@ -166,14 +166,28 @@ def collect_compute_data(session):
                 for cluster_name in page.get('clusters', []):
                     try:
                         cluster_details = eks_client.describe_cluster(name=cluster_name)['cluster']
+                        vpc_config = cluster_details.get("resourcesVpcConfig", {})
                         result_eks_clusters.append({
                             "Region": region,
                             "ClusterName": cluster_name,
                             "ARN": cluster_details.get('arn'),
-                            "Version": cluster_details.get('version')
+                            "Version": cluster_details.get('version'),
+                            "EndpointPublicAccess": vpc_config.get("endpointPublicAccess"),
+                            "EndpointPrivateAccess": vpc_config.get("endpointPrivateAccess"),
+                            "PublicAccessCidrs": vpc_config.get("publicAccessCidrs"),
+                            "SecurityGroupIds": vpc_config.get("securityGroupIds"),
+                            "ClusterSecurityGroupId": vpc_config.get("clusterSecurityGroupId"),
+                            "Enrichment": {"endpointAccess": {"status": "complete"}}
                         })
-                    except ClientError:
-                        continue # Si no se puede describir un cluster, continuamos con el siguiente
+                    except AWS_ERRORS as exc:
+                        reason = classify_error(exc)["category"]
+                        result_eks_clusters.append({
+                            "Region": region, "ClusterName": cluster_name,
+                            "EndpointPublicAccess": None, "EndpointPrivateAccess": None,
+                            "PublicAccessCidrs": None, "SecurityGroupIds": None,
+                            "ClusterSecurityGroupId": None,
+                            "Enrichment": {"endpointAccess": {"status": "failed", "reason": reason}}
+                        })
 
             # --- 4. Recolectar datos de ECS ---
             ecs_paginator = ecs_client.get_paginator('list_clusters')
