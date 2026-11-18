@@ -61,6 +61,8 @@ for (const file of ['08_inspector.js', '09_acm.js']) {
       for (const tab of ['acm-certificates-content', 'acm-lifecycle-content', 'acm-sh-content', 'acm-summary-content']) document.querySelector(`#acm-tabs a[data-tab="${tab}"]`).click();
     }
     const root = document.getElementById(file === '08_inspector.js' ? 'inspector-view' : 'acm-view');
+    // Collection notices intentionally differ from the pre-I19 baseline; compare the view content separately.
+    root.querySelectorAll('[data-collection-notice]').forEach(notice => notice.remove());
     if (module === original) { globalThis[`text_${file}`] = benignText(root); globalThis[`tags_${file}`] = tagSequence(root); }
     else {
       if (file === '08_inspector.js') {

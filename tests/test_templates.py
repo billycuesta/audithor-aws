@@ -74,6 +74,17 @@ def test_credential_mode_controls_exist_in_both_forms_without_inline_handlers():
     assert not re.search(r"\son[a-z]+\s*=", html, re.IGNORECASE)
 
 
+def test_inventory_is_first_active_sidebar_view():
+    template = Path(__file__).resolve().parents[1] / "audithor/templates/dashboard.html"
+    html = template.read_text()
+    sidebar = re.search(r'<nav id="sidebar-nav".*?</nav>', html, re.DOTALL).group(0)
+    first_link = re.search(r'<a[^>]+>', sidebar).group(0)
+    assert 'data-view="inventory"' in first_link
+    assert 'bg-[#eb3496]' in first_link
+    assert 'data-view="iam"' in sidebar
+    assert not re.search(r"\son[a-z]+\s*=", html, re.IGNORECASE)
+
+
 def test_dashboard_and_vendored_tailwind_are_served_by_flask():
     from audithor import audithor_app
     from conftest import make_client
