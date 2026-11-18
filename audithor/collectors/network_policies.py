@@ -1,7 +1,7 @@
 # collectors/network_policies.py
 import json
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 from .utils import get_all_aws_regions # Importación relativa
 from .diagnostics import classify_error
 
@@ -29,12 +29,34 @@ def collect_network_policies_data(session):
         'vpc-12345678'
     """
     regions = get_all_aws_regions(session)
-    result_vpcs, result_acls, result_sgs, result_subnets, result_nat_gateways = [], [], [], [], []
-    enrichment = {"securityGroupRules": {"status": "complete"}, "networkAcls": {"status": "complete"}}
+    result_vpcs, result_acls, result_sgs, result_subnets, result_nat_gateways, result_network_interfaces = [], [], [], [], [], []
+    enrichment = {"securityGroupRules": {"status": "complete"}, "networkAcls": {"status": "complete"}, "networkInterfaces": {"status": "complete", "regions": {}}}
 
     for region in regions:
         try:
             ec2_client = session.client("ec2", region_name=region)
+
+            enrichment["networkInterfaces"]["regions"][region] = {"status": "complete"}
+            try:
+                network_interface_paginator = ec2_client.get_paginator('describe_network_interfaces')
+                for page in network_interface_paginator.paginate():
+                    for interface in page.get("NetworkInterfaces", []):
+                        result_network_interfaces.append({
+                            "Region": region,
+                            "NetworkInterfaceId": interface.get("NetworkInterfaceId"),
+                            "InterfaceType": interface.get("InterfaceType"),
+                            "RequesterId": interface.get("RequesterId"),
+                            "RequesterManaged": interface.get("RequesterManaged"),
+                            "Description": interface.get("Description"),
+                            "VpcId": interface.get("VpcId"),
+                            "SubnetId": interface.get("SubnetId"),
+                            "Groups": [group.get("GroupId") for group in interface.get("Groups", [])],
+                            "PrivateIpAddresses": [address.get("PrivateIpAddress") for address in interface.get("PrivateIpAddresses", [])],
+                            "PublicIp": interface.get("Association", {}).get("PublicIp")
+                        })
+            except (ClientError, BotoCoreError) as e:
+                enrichment["networkInterfaces"]["regions"][region] = {"status": "failed", "reason": classify_error(e)["category"]}
+                enrichment["networkInterfaces"]["status"] = "failed"
 
             # Collect VPCs
             for vpc in ec2_client.describe_vpcs().get("Vpcs", []):
@@ -94,6 +116,7 @@ def collect_network_policies_data(session):
         "subnets": result_subnets,
         "all_regions": regions,
         "nat_gateways": result_nat_gateways,
+        "network_interfaces": result_network_interfaces,
         "Enrichment": enrichment
     }
 
