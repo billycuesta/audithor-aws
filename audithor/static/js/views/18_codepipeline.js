@@ -275,8 +275,7 @@ export const buildCodePipelineView = () => {
 
     const securityIssues = pipelines.filter(p => !p.IsEncrypted || !p.HasManualApproval || !p.HasSecurityScan).length;
     setHtml(container, html`<header class="flex justify-between items-center mb-6"><div><h2 class="text-2xl font-bold text-[#204071]">CodePipeline</h2><p class="text-sm text-gray-500">${executionDate}</p></div></header>
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6"><h3 class="text-sm font-semibold text-blue-800 mb-2">Audit Guidance</h3><p class="text-sm text-blue-700">Review CodePipeline configurations for comprehensive security controls including artifact encryption, manual approval gates, IAM role permissions, and integration with security scanning tools. Focus on identifying pipelines with missing security controls and compliance gaps.</p></div>
-        <div class="border-b border-gray-200 mb-6"><nav class="-mb-px flex flex-wrap space-x-6" id="codepipeline-tabs">
+<div class="border-b border-gray-200 mb-6"><nav class="-mb-px flex flex-wrap space-x-6" id="codepipeline-tabs">
             <a href="#" data-tab="cp-summary-content" class="tab-link py-3 px-1 border-b-2 border-[#eb3496] text-[#eb3496] font-semibold text-sm">Summary</a>
             <a href="#" data-tab="cp-security-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Security Analysis (${securityIssues})</a>
             <a href="#" data-tab="cp-details-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Pipeline Details (${pipelines.length})</a>

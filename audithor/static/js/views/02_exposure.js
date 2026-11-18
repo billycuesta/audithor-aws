@@ -120,13 +120,7 @@ export const buildExposureView = () => {
         <header class="flex justify-between items-center mb-6">
             <div><h2 class="text-2xl font-bold text-[#204071]">Internet Exposure</h2><p class="text-sm text-gray-500">${window.exposureApiData.metadata.executionDate}</p></div>
         </header>
-        
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <h3 class="text-sm font-semibold text-blue-800 mb-2">Audit Guidance</h3>
-            <p class="text-sm text-blue-700">Review internet-exposed resources to ensure they follow security best practices and have legitimate business justification. Each tab provides specific audit considerations and security implications for that exposure type.</p>
-        </div>
-        
-        <div class="border-b border-gray-200 mb-6"><nav class="-mb-px flex flex-wrap space-x-6">${join(tabs)}</nav></div>
+<div class="border-b border-gray-200 mb-6"><nav class="-mb-px flex flex-wrap space-x-6">${join(tabs)}</nav></div>
         <div>${join(content)}</div>`);
 
     updateExposureSummaryCards(window.exposureApiData.results.summary, securityHubFindings);

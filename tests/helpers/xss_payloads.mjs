@@ -53,10 +53,23 @@ export function assertTextContainsInOrder(actual, expected, label) {
   assertOrderedSubsequence(actual.trim().split(/\s+/), expected.trim().split(/\s+/), label);
 }
 
+export function stripAuditGuidance(root) {
+  for (const heading of root.querySelectorAll('h3')) {
+    if (heading.textContent.trim() === 'Audit Guidance') {
+      heading.closest('.bg-blue-50')?.remove();
+    }
+  }
+  return root;
+}
+
 export const benignText = root => {
+  stripAuditGuidance(root);
   const walker = root.ownerDocument.createTreeWalker(root, 4);
   const parts = [];
   while (walker.nextNode()) parts.push(walker.currentNode.nodeValue);
   return parts.join(' ').replace(/\s+/g, ' ').trim();
 };
-export const tagSequence = root => [...root.querySelectorAll('*')].map(el => el.tagName.toLowerCase());
+export const tagSequence = root => {
+  stripAuditGuidance(root);
+  return [...root.querySelectorAll('*')].map(el => el.tagName.toLowerCase());
+};

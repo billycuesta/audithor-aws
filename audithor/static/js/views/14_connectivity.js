@@ -57,13 +57,7 @@ export const buildConnectivityView = () => {
                 <p class="text-sm text-gray-500">${window.connectivityApiData.metadata.executionDate}</p>
             </div>
         </header>
-        
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <h3 class="text-sm font-semibold text-blue-800 mb-2">Audit Guidance</h3>
-            <p class="text-sm text-blue-700">Review network connectivity components to ensure proper segmentation, security controls, and compliance with data flow requirements. Each tab provides specific audit considerations for that service type.</p>
-        </div>
-        
-        <div class="border-b border-gray-200 mb-6">
+<div class="border-b border-gray-200 mb-6">
             <nav class="-mb-px flex flex-wrap space-x-6" id="connectivity-tabs">
                 <a href="#" data-tab="conn-peering-content" class="tab-link py-3 px-1 border-b-2 border-[#eb3496] text-[#eb3496] font-semibold text-sm">VPC Peering (${peering_connections.length})</a>
                 <a href="#" data-tab="conn-tgw-content" class="tab-link py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">Transit Gateway (${tgw_attachments.length})</a>
