@@ -25,7 +25,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 # --- 1. IMPORTA TUS NUEVOS MÓDULOS ---
 from .collectors import (
-    utils, iam, securityhub, exposure, guardduty, waf, cloudtrail,
+    utils, iam, organizations, securityhub, exposure, guardduty, waf, cloudtrail,
     cloudwatch, inspector, kms, acm, compute, databases,
     network_policies, connectivity, config_sh, playground, ecr, codepipeline, inventory
 )
@@ -141,6 +141,7 @@ def run_iam_audit():
     try:
         iam_results = iam.collect_iam_data(session)
         iam_results["users"] = iam.check_critical_permissions(session, iam_results["users"])
+        iam_results["region_guardrails"] = organizations.collect_region_guardrails(session)
         sts = session.client("sts")
         return jsonify({ "metadata": {"accountId": sts.get_caller_identity()["Account"], "executionDate": datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S %Z")}, "results": iam_results })
     except Exception as e:

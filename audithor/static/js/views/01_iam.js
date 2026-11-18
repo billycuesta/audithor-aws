@@ -48,6 +48,7 @@ export const buildIamView = () => {
             <div id="resumen-content" class="iam-tab-content">
                 ${raw(renderServiceDescription(serviceDescriptions.summary))}
                 ${raw(createIamResumenHtml())}
+                ${renderRegionGuardrails(window.iamApiData?.results?.region_guardrails)}
             </div>
             <div id="usuarios-content" class="iam-tab-content hidden">
                 ${raw(renderServiceDescription(serviceDescriptions.users))}
@@ -242,6 +243,28 @@ const renderAccessAnalyzerContent = () => {
             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/12">Public</th>
             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-2/12">Allowed Actions</th>
         </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></div>`);
+};
+
+const renderRegionGuardrails = (guardrails) => {
+    if (!guardrails) return html`<section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6"><h3 class="font-bold text-lg mb-4 text-[#204071]">Region guardrails</h3><p class="text-sm text-gray-500">Not collected</p></section>`;
+    const enrichment = guardrails.Enrichment?.regionGuardrails;
+    if (enrichment?.status === 'failed' || enrichment?.status === 'skipped') {
+        return html`<section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6"><h3 class="font-bold text-lg mb-4 text-[#204071]">Region guardrails</h3><p class="text-sm text-gray-500">Not collected: ${enrichment.reason || enrichment.status}</p></section>`;
+    }
+    const policies = guardrails.Policies || [];
+    if (!policies.length) return html`<section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6"><h3 class="font-bold text-lg mb-4 text-[#204071]">Region guardrails</h3><p class="text-sm text-gray-500">No region-restricting SCP found</p></section>`;
+    const rows = policies.map(policy => html`<tr class="hover:bg-gray-50">
+        <td class="px-4 py-3 text-sm text-gray-800">${policy.Name || 'SCP'} (${policy.PolicyId})</td>
+        <td class="px-4 py-3 text-sm text-gray-600">${(policy.AllowedRegions || []).join(', ') || 'None'}</td>
+        <td class="px-4 py-3 text-sm text-gray-600">${(policy.DeniedRegions || []).join(', ') || 'None'}</td>
+        <td class="px-4 py-3 text-sm text-gray-600">${(policy.Targets || []).map(target => `${target.Name} (${target.Type})`).join(', ') || 'None'}</td>
+        <td class="px-4 py-3 text-sm text-gray-600">${(policy.ExemptActions || []).join(', ') || 'None'}</td>
+    </tr>`);
+    return html`<section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-x-auto mb-6">
+        <h3 class="font-bold text-lg mb-4 text-[#204071]">Region guardrails</h3>
+        <table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SCP</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Allowed regions</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Denied regions</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Targets</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Exempt actions</th>
+        </tr></thead><tbody class="bg-white divide-y divide-gray-200">${join(rows)}</tbody></table></section>`;
 };
 
 const createIamResumenHtml = () => `
